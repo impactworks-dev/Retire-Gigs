@@ -6,6 +6,7 @@ import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
+import seniorWomanImage from "@assets/generated_images/Senior_woman_using_smartphone_715d76e9.png";
 
 export default function Welcome() {
   const [, setLocation] = useLocation();
@@ -39,8 +40,8 @@ export default function Welcome() {
         <div className="text-center mb-12">
           {/* Hero Image */}
           <img 
-            src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=800&h=600" 
-            alt="Mature professional smiling and working at desk" 
+            src={seniorWomanImage} 
+            alt="Senior woman comfortably using smartphone on couch" 
             className="rounded-2xl shadow-lg w-full h-64 object-cover mb-8"
             data-testid="img-hero"
           />
