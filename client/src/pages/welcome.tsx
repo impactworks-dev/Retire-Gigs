@@ -39,8 +39,8 @@ export default function Welcome() {
         <div className="text-center mb-12">
           {/* Hero Image */}
           <img 
-            src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=800&h=600" 
-            alt="Mature professional at work" 
+            src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=800&h=600" 
+            alt="Mature professional smiling and working at desk" 
             className="rounded-2xl shadow-lg w-full h-64 object-cover mb-8"
             data-testid="img-hero"
           />
