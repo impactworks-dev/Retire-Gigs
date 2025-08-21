@@ -127,7 +127,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       await transporter.sendMail({
-        from: '"JobConnect 55+" <noreply@jobconnect55.com>',
+        from: '"Retiree Gigs" <noreply@retireegigs.com>',
         to: email,
         subject,
         html: content

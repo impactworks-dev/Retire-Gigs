@@ -2,7 +2,7 @@
 
 ## Overview
 
-JobConnect 55+ is a job matching platform specifically designed for adults aged 55 and older. The application provides a user-friendly questionnaire-based onboarding process that collects preferences and background information to match users with appropriate job opportunities. The platform focuses on accessibility and simplicity, presenting one question at a time with large, clickable buttons to reduce friction in the user experience.
+Retiree Gigs is a job matching platform specifically designed for adults aged 55 and older. The application provides a user-friendly questionnaire-based onboarding process that collects preferences and background information to match users with appropriate job opportunities. The platform focuses on accessibility and simplicity, presenting one question at a time with large, clickable buttons to reduce friction in the user experience.
 
 ## User Preferences
 
