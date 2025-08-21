@@ -1,0 +1,120 @@
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { CheckCircle, ClipboardList, Zap, Clock } from "lucide-react";
+import { Layout } from "@/components/layout";
+import { useMutation } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { useLocation } from "wouter";
+import { useToast } from "@/hooks/use-toast";
+
+export default function Welcome() {
+  const [, setLocation] = useLocation();
+  const { toast } = useToast();
+
+  const createUserMutation = useMutation({
+    mutationFn: async (age: string) => {
+      const response = await apiRequest("POST", "/api/users", { age });
+      return response.json();
+    },
+    onSuccess: (user) => {
+      localStorage.setItem("userId", user.id);
+      setLocation("/questionnaire");
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to verify age. Please try again.",
+        variant: "destructive",
+      });
+    }
+  });
+
+  const handleAgeVerification = () => {
+    createUserMutation.mutate("55+");
+  };
+
+  return (
+    <Layout>
+      <div className="max-w-2xl mx-auto px-6 py-12">
+        <div className="text-center mb-12">
+          {/* Hero Image */}
+          <img 
+            src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=800&h=600" 
+            alt="Mature professional at work" 
+            className="rounded-2xl shadow-lg w-full h-64 object-cover mb-8"
+            data-testid="img-hero"
+          />
+          
+          <h2 
+            className="text-3xl font-bold text-gray-900 mb-4"
+            data-testid="text-hero-title"
+          >
+            Find Meaningful Work After 55
+          </h2>
+          <p 
+            className="text-xl text-gray-600 mb-8 leading-relaxed"
+            data-testid="text-hero-description"
+          >
+            Connect with opportunities that match your experience, schedule, and goals. We'll help you find the perfect fit.
+          </p>
+        </div>
+
+        {/* Age Verification */}
+        <div className="bg-white rounded-2xl shadow-lg p-8 mb-8">
+          <h3 
+            className="text-xl font-semibold text-gray-900 mb-6"
+            data-testid="text-age-verification-title"
+          >
+            Age Verification
+          </h3>
+          <p 
+            className="text-lg text-gray-600 mb-6"
+            data-testid="text-age-verification-description"
+          >
+            This service is designed for adults 55 and older. Please confirm your age to continue.
+          </p>
+          
+          <div className="space-y-4">
+            <Button
+              onClick={handleAgeVerification}
+              disabled={createUserMutation.isPending}
+              size="lg"
+              className="w-full bg-primary hover:bg-blue-700 text-white text-lg font-medium py-4 px-6"
+              data-testid="button-age-verification"
+            >
+              <CheckCircle className="w-6 h-6 mr-3" />
+              {createUserMutation.isPending ? "Verifying..." : "I am 55 or older - Get Started"}
+            </Button>
+          </div>
+        </div>
+
+        {/* Feature Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="bg-white rounded-xl p-6 shadow-sm" data-testid="card-feature-assessment">
+            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4">
+              <ClipboardList className="w-6 h-6 text-primary" />
+            </div>
+            <h4 className="font-semibold text-gray-900 mb-2">Quick Assessment</h4>
+            <p className="text-gray-600 text-sm">7 simple questions to understand your preferences</p>
+          </div>
+
+          <div className="bg-white rounded-xl p-6 shadow-sm" data-testid="card-feature-matching">
+            <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mb-4">
+              <Zap className="w-6 h-6 text-secondary" />
+            </div>
+            <h4 className="font-semibold text-gray-900 mb-2">Smart Matching</h4>
+            <p className="text-gray-600 text-sm">AI-powered job matching based on your answers</p>
+          </div>
+
+          <div className="bg-white rounded-xl p-6 shadow-sm" data-testid="card-feature-schedule">
+            <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mb-4">
+              <Clock className="w-6 h-6 text-purple-600" />
+            </div>
+            <h4 className="font-semibold text-gray-900 mb-2">Your Schedule</h4>
+            <p className="text-gray-600 text-sm">Receive opportunities on your preferred schedule</p>
+          </div>
+        </div>
+      </div>
+    </Layout>
+  );
+}
