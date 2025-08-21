@@ -1,0 +1,64 @@
+A clean, user-friendly tool presents one question at a time with large, clickable buttons. It's easy to follow and removes any friction.
+
+And then of course, the actual ops of the entire business runs mostly on AI with the use of Lindy AI.
+
+
+The questions to ask are below
+
+1. What do you enjoy doing in your free time?
+(Purpose: Personality fit → maps to task style)
+* Hands-on work (fixing, organizing, building)
+* Outdoor activities (gardening, walking, nature)
+* Creative work (crafts, cooking, DIY)
+* Helping others (volunteering, caregiving, mentoring)
+* Being social (talking with people, community events)
+* Quiet tasks (reading, admin work, organizing)
+* Working with tech (email, Zoom, spreadsheets)
+* Professional thinking (office work, advising, leadership)
+2. What are you hoping this new job brings into your life?
+(Purpose: Motivation filter → maps to role type & emotional resonance)
+* Extra income
+* Staying active
+* Meeting new people
+* Feeling useful / purposeful
+* Something to do
+* Not sure yet
+3. Are there jobs you would not enjoy?
+(Purpose: Hard exclusions → filters out mismatches early)
+* Physical work / heavy lifting
+* Customer service / talking with customers
+* Computer-heavy tasks
+* Long hours / rigid schedules
+* None of these
+4. Where would you prefer to work?
+(Purpose: Environment filter → maps to remote/local job types)
+* From home
+* Close to home
+* Either one is fine
+5. How often would you like to work?
+(Purpose: Scheduling filter → part-time vs. occasional gigs)
+* Just here and there
+* A few hours per week
+* Steady part-time (10–20 hours/week)
+* I’m open to anything
+6. Want to tell us about your past work experience? (Optional)
+(Purpose: Unlock high-value matches for skilled retirees)
+* Education / Teaching
+* Healthcare / Nursing
+* Business / Management
+* Trades / Skilled Labor
+* Public Service / Government
+* Creative / Media / Arts
+* Sales / Customer Service
+* Prefer not to say / Doesn’t apply
+7. Anything else we should know while we match you? (Optional)
+(Purpose: Catch qualitative preferences that aren’t captured above)
+* I prefer low-pressure work
+* I’d like to use my skills again
+* I want something meaningful
+* I don’t want to drive far
+* I just want to stay busy
+* I’m still figuring this out
+
+
+
