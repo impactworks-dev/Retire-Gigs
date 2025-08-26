@@ -6,8 +6,14 @@ import {
   type UserPreferences,
   type InsertUserPreferences,
   type JobOpportunity,
-  type InsertJobOpportunity
+  type InsertJobOpportunity,
+  users,
+  questionnaireResponses,
+  userPreferences,
+  jobOpportunities
 } from "@shared/schema";
+import { db } from "./db";
+import { eq } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
 export interface IStorage {
@@ -200,4 +206,87 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+// Database-backed storage implementation
+export class DatabaseStorage implements IStorage {
+  async createUser(insertUser: InsertUser): Promise<User> {
+    const [user] = await db
+      .insert(users)
+      .values(insertUser)
+      .returning();
+    return user;
+  }
+
+  async getUser(id: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user || undefined;
+  }
+
+  async saveQuestionnaireResponse(response: InsertQuestionnaireResponse): Promise<QuestionnaireResponse> {
+    const [questionnaireResponse] = await db
+      .insert(questionnaireResponses)
+      .values(response)
+      .returning();
+    return questionnaireResponse;
+  }
+
+  async getQuestionnaireResponse(userId: string): Promise<QuestionnaireResponse | undefined> {
+    const [response] = await db
+      .select()
+      .from(questionnaireResponses)
+      .where(eq(questionnaireResponses.userId, userId));
+    return response || undefined;
+  }
+
+  async saveUserPreferences(preferences: InsertUserPreferences): Promise<UserPreferences> {
+    const [userPrefs] = await db
+      .insert(userPreferences)
+      .values(preferences)
+      .returning();
+    return userPrefs;
+  }
+
+  async getUserPreferences(userId: string): Promise<UserPreferences | undefined> {
+    const [prefs] = await db
+      .select()
+      .from(userPreferences)
+      .where(eq(userPreferences.userId, userId));
+    return prefs || undefined;
+  }
+
+  async updateUserPreferences(userId: string, preferences: Partial<InsertUserPreferences>): Promise<UserPreferences> {
+    const [updated] = await db
+      .update(userPreferences)
+      .set({ ...preferences, updatedAt: new Date() })
+      .where(eq(userPreferences.userId, userId))
+      .returning();
+    
+    if (!updated) {
+      throw new Error("User preferences not found");
+    }
+    
+    return updated;
+  }
+
+  async getJobOpportunities(): Promise<JobOpportunity[]> {
+    return await db
+      .select()
+      .from(jobOpportunities)
+      .where(eq(jobOpportunities.isActive, true));
+  }
+
+  async getMatchingJobs(userId: string): Promise<JobOpportunity[]> {
+    // For now, return all active jobs
+    // In a real implementation, this would use the questionnaire responses to match jobs
+    return this.getJobOpportunities();
+  }
+
+  async createJobOpportunity(job: InsertJobOpportunity): Promise<JobOpportunity> {
+    const [jobOpportunity] = await db
+      .insert(jobOpportunities)
+      .values(job)
+      .returning();
+    return jobOpportunity;
+  }
+}
+
+export const storage = new DatabaseStorage();

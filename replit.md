@@ -22,7 +22,7 @@ Preferred communication style: Simple, everyday language.
 - **Runtime**: Node.js with Express.js web framework
 - **Language**: TypeScript with ES modules
 - **API Design**: RESTful API with structured error handling and request logging
-- **Storage Layer**: Abstracted storage interface with in-memory implementation for development
+- **Storage Layer**: Abstracted storage interface with PostgreSQL database implementation using Neon
 - **Validation**: Zod schemas for runtime type checking and data validation
 
 ### Data Architecture
@@ -63,3 +63,12 @@ Preferred communication style: Simple, everyday language.
 - **SMS Service**: For mobile notifications
 - **Job Board APIs**: For external job opportunity sourcing
 - **Analytics**: For user behavior tracking and platform optimization
+
+## Recent Changes
+
+### Database Integration (August 26, 2025)
+- Migrated from in-memory storage to PostgreSQL database using Neon
+- Added proper Drizzle ORM relations between users, questionnaire responses, and preferences
+- Implemented DatabaseStorage class to replace MemStorage
+- Successfully pushed schema to database and seeded with sample job opportunities
+- Application fully functional with persistent data storage
