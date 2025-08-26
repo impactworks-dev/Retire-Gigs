@@ -30,7 +30,7 @@ export const questions: Question[] = [
   {
     id: 1,
     title: "What do you enjoy doing in your free time?",
-    description: "This helps us understand what type of work might appeal to you.",
+    description: "Select all activities that interest you. This helps us understand what type of work might appeal to you.",
     options: [
       {
         value: "hands-on",
@@ -77,7 +77,7 @@ export const questions: Question[] = [
   {
     id: 2,
     title: "What are you hoping this new job brings into your life?",
-    description: "Understanding your motivation helps us find the right fit.",
+    description: "Select all that apply. Understanding your motivations helps us find the right fit.",
     options: [
       {
         value: "income",
@@ -114,7 +114,7 @@ export const questions: Question[] = [
   {
     id: 3,
     title: "Are there jobs you would not enjoy?",
-    description: "Help us filter out work that doesn't match your preferences.",
+    description: "Select any that apply. This helps us filter out work that doesn't match your preferences.",
     options: [
       {
         value: "physical",
@@ -146,7 +146,7 @@ export const questions: Question[] = [
   {
     id: 4,
     title: "Where would you prefer to work?",
-    description: "This helps us match you with opportunities in your preferred location.",
+    description: "Select all that work for you. This helps us match you with opportunities in your preferred locations.",
     options: [
       {
         value: "home",
@@ -168,7 +168,7 @@ export const questions: Question[] = [
   {
     id: 5,
     title: "How often would you like to work?",
-    description: "This helps us find opportunities that match your availability.",
+    description: "Select all schedules that interest you. This helps us find opportunities that match your availability.",
     options: [
       {
         value: "occasional",
@@ -195,7 +195,7 @@ export const questions: Question[] = [
   {
     id: 6,
     title: "Want to tell us about your past work experience? (Optional)",
-    description: "This helps us find opportunities that use your valuable skills and experience.",
+    description: "Select all that apply. This helps us find opportunities that use your valuable skills and experience.",
     options: [
       {
         value: "education",
@@ -242,7 +242,7 @@ export const questions: Question[] = [
   {
     id: 7,
     title: "Anything else we should know while we match you? (Optional)",
-    description: "These preferences help us fine-tune your job matches.",
+    description: "Select all that apply. These preferences help us fine-tune your job matches.",
     options: [
       {
         value: "low-pressure",

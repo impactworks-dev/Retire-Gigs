@@ -18,7 +18,24 @@ export function QuestionnaireFlow({ onComplete }: QuestionnaireFlowProps) {
 
   const handleAnswerSelect = (value: string) => {
     const questionKey = `question_${currentQuestion}` as keyof QuestionnaireAnswers;
-    setAnswers(prev => ({ ...prev, [questionKey]: value }));
+    setAnswers(prev => {
+      const currentAnswers = prev[questionKey] || [];
+      const isSelected = currentAnswers.includes(value);
+      
+      if (isSelected) {
+        // Remove the value if already selected
+        return {
+          ...prev,
+          [questionKey]: currentAnswers.filter(answer => answer !== value)
+        };
+      } else {
+        // Add the value if not selected
+        return {
+          ...prev,
+          [questionKey]: [...currentAnswers, value]
+        };
+      }
+    });
   };
 
   const handleNext = () => {
@@ -36,8 +53,8 @@ export function QuestionnaireFlow({ onComplete }: QuestionnaireFlowProps) {
   };
 
   const currentQuestionData = questions[currentQuestion - 1];
-  const currentAnswer = answers[`question_${currentQuestion}` as keyof QuestionnaireAnswers];
-  const isAnswered = !!currentAnswer;
+  const currentAnswers = answers[`question_${currentQuestion}` as keyof QuestionnaireAnswers] || [];
+  const isAnswered = currentAnswers.length > 0;
 
   return (
     <div className="max-w-2xl mx-auto px-6 py-8">
@@ -47,7 +64,14 @@ export function QuestionnaireFlow({ onComplete }: QuestionnaireFlowProps) {
           <span data-testid="text-question-progress">
             Question <span>{currentQuestion}</span> of {totalQuestions}
           </span>
-          <span data-testid="text-progress-percent">{Math.round(progress)}%</span>
+          <div className="flex items-center gap-4">
+            {currentAnswers.length > 0 && (
+              <span data-testid="text-selections-count" className="text-primary font-medium">
+                {currentAnswers.length} selected
+              </span>
+            )}
+            <span data-testid="text-progress-percent">{Math.round(progress)}%</span>
+          </div>
         </div>
         <Progress value={progress} className="h-3" data-testid="progress-questionnaire" />
       </div>
@@ -61,29 +85,44 @@ export function QuestionnaireFlow({ onComplete }: QuestionnaireFlowProps) {
           {currentQuestionData.title}
         </h2>
         <p 
-          className="text-lg text-gray-600 mb-8"
+          className="text-lg text-gray-600 mb-4"
           data-testid={`text-question-description-${currentQuestion}`}
         >
           {currentQuestionData.description}
         </p>
+        <p className="text-sm text-gray-500 mb-8 italic">
+          You can select multiple options that apply to you.
+        </p>
 
         {/* Answer Options */}
         <div className="space-y-4">
-          {currentQuestionData.options.map((option) => (
-            <button
-              key={option.value}
-              onClick={() => handleAnswerSelect(option.value)}
-              className={`w-full text-left text-lg font-medium py-4 px-6 rounded-xl border-2 transition-all duration-200 flex items-center ${
-                currentAnswer === option.value
-                  ? "bg-primary text-white border-primary"
-                  : "bg-gray-50 hover:bg-primary hover:text-white text-gray-900 border-transparent hover:border-primary"
-              }`}
-              data-testid={`button-answer-${option.value}`}
-            >
-              <div className="mr-4">{option.icon}</div>
-              {option.label}
-            </button>
-          ))}
+          {currentQuestionData.options.map((option) => {
+            const isSelected = currentAnswers.includes(option.value);
+            return (
+              <button
+                key={option.value}
+                onClick={() => handleAnswerSelect(option.value)}
+                className={`w-full text-left text-lg font-medium py-4 px-6 rounded-xl border-2 transition-all duration-200 flex items-center justify-between ${
+                  isSelected
+                    ? "bg-primary text-white border-primary"
+                    : "bg-gray-50 hover:bg-primary hover:text-white text-gray-900 border-transparent hover:border-primary"
+                }`}
+                data-testid={`button-answer-${option.value}`}
+              >
+                <div className="flex items-center">
+                  <div className="mr-4">{option.icon}</div>
+                  {option.label}
+                </div>
+                {isSelected && (
+                  <div className="ml-4">
+                    <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
 
