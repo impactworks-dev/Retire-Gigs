@@ -60,6 +60,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Check if user has completed questionnaire
+  app.get("/api/questionnaire/status/:userId", async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const response = await storage.getQuestionnaireResponse(userId);
+      res.json({ completed: !!response });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to check questionnaire status" });
+    }
+  });
+
   // Save user preferences
   app.post("/api/preferences", async (req, res) => {
     try {

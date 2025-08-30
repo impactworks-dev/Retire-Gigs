@@ -1,24 +1,42 @@
+import { useEffect } from "react";
 import { Layout } from "@/components/layout";
 import { QuestionnaireFlow } from "@/components/questionnaire-flow";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import { isUnauthorizedError } from "@/lib/authUtils";
 import type { QuestionnaireAnswers } from "@/types/questionnaire";
 
 export default function Questionnaire() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { user, isAuthenticated, isLoading } = useAuth();
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      toast({
+        title: "Unauthorized",
+        description: "You are logged out. Logging in again...",
+        variant: "destructive",
+      });
+      setTimeout(() => {
+        window.location.href = "/api/login";
+      }, 500);
+      return;
+    }
+  }, [isAuthenticated, isLoading, toast]);
 
   const saveResponsesMutation = useMutation({
     mutationFn: async (answers: QuestionnaireAnswers) => {
-      const userId = localStorage.getItem("userId");
-      if (!userId) {
+      if (!user?.id) {
         throw new Error("User ID not found");
       }
       
       const response = await apiRequest("POST", "/api/questionnaire", {
-        userId,
+        userId: user.id,
         responses: answers
       });
       return response.json();
@@ -30,7 +48,18 @@ export default function Questionnaire() {
       });
       setLocation("/dashboard");
     },
-    onError: () => {
+    onError: (error) => {
+      if (isUnauthorizedError(error)) {
+        toast({
+          title: "Unauthorized",
+          description: "You are logged out. Logging in again...",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 500);
+        return;
+      }
       toast({
         title: "Error",
         description: "Failed to save responses. Please try again.",
@@ -42,6 +71,23 @@ export default function Questionnaire() {
   const handleQuestionnaireComplete = (answers: QuestionnaireAnswers) => {
     saveResponsesMutation.mutate(answers);
   };
+
+  if (isLoading) {
+    return (
+      <Layout>
+        <div className="max-w-2xl mx-auto px-6 py-8">
+          <div className="text-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+            <p className="mt-4 text-gray-600">Loading questionnaire...</p>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return null; // Will redirect in useEffect
+  }
 
   return (
     <Layout>
