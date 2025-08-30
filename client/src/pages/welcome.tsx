@@ -1,37 +1,28 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { CheckCircle, ClipboardList, Zap, Clock } from "lucide-react";
+import { CheckCircle, ClipboardList, Zap, Clock, LogIn } from "lucide-react";
 import { Layout } from "@/components/layout";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import seniorWomanImage from "@assets/generated_images/Senior_woman_using_smartphone_715d76e9.png";
 
 export default function Welcome() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { isAuthenticated, isLoading } = useAuth();
 
-  const createUserMutation = useMutation({
-    mutationFn: async (age: string) => {
-      const response = await apiRequest("POST", "/api/users", { age });
-      return response.json();
-    },
-    onSuccess: (user) => {
-      localStorage.setItem("userId", user.id);
-      setLocation("/questionnaire");
-    },
-    onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to verify age. Please try again.",
-        variant: "destructive",
-      });
+  // Redirect to dashboard if already authenticated
+  useEffect(() => {
+    if (!isLoading && isAuthenticated) {
+      setLocation("/dashboard");
     }
-  });
+  }, [isAuthenticated, isLoading, setLocation]);
 
-  const handleAgeVerification = () => {
-    createUserMutation.mutate("55+");
+  const handleGetStarted = () => {
+    window.location.href = "/api/login";
   };
 
   return (
@@ -77,14 +68,13 @@ export default function Welcome() {
           
           <div className="space-y-4">
             <Button
-              onClick={handleAgeVerification}
-              disabled={createUserMutation.isPending}
+              onClick={handleGetStarted}
               size="lg"
               className="w-full bg-primary hover:bg-blue-700 text-white text-lg font-medium py-4 px-6"
-              data-testid="button-age-verification"
+              data-testid="button-get-started"
             >
-              <CheckCircle className="w-6 h-6 mr-3" />
-              {createUserMutation.isPending ? "Verifying..." : "I am 55 or older - Get Started"}
+              <LogIn className="w-6 h-6 mr-3" />
+              I am 55 or older - Sign In to Get Started
             </Button>
           </div>
         </div>

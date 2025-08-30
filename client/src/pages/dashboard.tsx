@@ -3,10 +3,13 @@ import { Layout } from "@/components/layout";
 import { JobCard } from "@/components/job-card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Lightbulb, Calendar, Mail, Settings } from "lucide-react";
+import { Lightbulb, Calendar, Mail, Settings, User } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import { isUnauthorizedError } from "@/lib/authUtils";
+import { Link } from "wouter";
 import type { JobOpportunity, UserPreferences } from "@shared/schema";
 import type { SchedulePreference } from "@/types/questionnaire";
 
@@ -15,44 +18,70 @@ export default function Dashboard() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const userId = localStorage.getItem("userId");
+  const { user: authUser, isLoading: authLoading, isAuthenticated } = useAuth();
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      toast({
+        title: "Unauthorized",
+        description: "You are logged out. Logging in again...",
+        variant: "destructive",
+      });
+      setTimeout(() => {
+        window.location.href = "/api/login";
+      }, 500);
+      return;
+    }
+  }, [isAuthenticated, authLoading, toast]);
 
   // Fetch job opportunities
   const { data: jobs = [], isLoading: jobsLoading } = useQuery<JobOpportunity[]>({
     queryKey: ["/api/jobs"],
-    enabled: !!userId,
+    enabled: !!authUser?.id,
   });
 
   // Fetch user preferences
   const { data: preferences } = useQuery<UserPreferences>({
-    queryKey: ["/api/preferences", userId],
-    enabled: !!userId,
+    queryKey: ["/api/preferences", authUser?.id],
+    enabled: !!authUser?.id,
   });
 
   // Update preferences mutation
   const updatePreferencesMutation = useMutation({
     mutationFn: async (data: { schedulePreference?: SchedulePreference; notificationsEnabled?: boolean }) => {
-      if (!userId) throw new Error("User ID not found");
+      if (!authUser?.id) throw new Error("User ID not found");
       
       if (preferences) {
-        const response = await apiRequest("PATCH", `/api/preferences/${userId}`, data);
+        const response = await apiRequest("PATCH", `/api/preferences/${authUser.id}`, data);
         return response.json();
       } else {
         const response = await apiRequest("POST", "/api/preferences", {
-          userId,
+          userId: authUser.id,
           ...data
         });
         return response.json();
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/preferences", userId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/preferences", authUser?.id] });
       toast({
         title: "Preferences updated",
         description: "Your notification preferences have been saved.",
       });
     },
-    onError: () => {
+    onError: (error) => {
+      if (isUnauthorizedError(error)) {
+        toast({
+          title: "Unauthorized",
+          description: "You are logged out. Logging in again...",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 500);
+        return;
+      }
       toast({
         title: "Error",
         description: "Failed to update preferences. Please try again.",
@@ -86,7 +115,7 @@ export default function Dashboard() {
     });
   };
 
-  if (jobsLoading) {
+  if (authLoading || jobsLoading) {
     return (
       <Layout>
         <div className="max-w-4xl mx-auto px-6 py-8">
@@ -99,17 +128,34 @@ export default function Dashboard() {
     );
   }
 
+  if (!isAuthenticated) {
+    return null; // Will redirect in useEffect
+  }
+
   return (
     <Layout>
       <div className="max-w-4xl mx-auto px-6 py-8">
         {/* Header */}
         <div className="mb-8">
-          <h2 
-            className="text-3xl font-bold text-gray-900 mb-4"
-            data-testid="text-dashboard-title"
-          >
-            Your Job Matches
-          </h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 
+              className="text-3xl font-bold text-gray-900"
+              data-testid="text-dashboard-title"
+            >
+              Your Job Matches
+            </h2>
+            <Link href="/profile">
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex items-center"
+                data-testid="button-profile"
+              >
+                <User className="w-4 h-4 mr-2" />
+                Profile
+              </Button>
+            </Link>
+          </div>
           <p 
             className="text-xl text-gray-600"
             data-testid="text-dashboard-description"

@@ -1,12 +1,28 @@
 import { sql, relations } from "drizzle-orm";
-import { pgTable, text, varchar, jsonb, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, jsonb, timestamp, boolean, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+
+// Session storage table for Replit Auth
+export const sessions = pgTable(
+  "sessions",
+  {
+    sid: varchar("sid").primaryKey(),
+    sess: jsonb("sess").notNull(),
+    expire: timestamp("expire").notNull(),
+  },
+  (table) => [index("IDX_session_expire").on(table.expire)],
+);
 
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   age: text("age").notNull(),
+  email: varchar("email").unique(),
+  firstName: varchar("first_name"),
+  lastName: varchar("last_name"),
+  profileImageUrl: varchar("profile_image_url"),
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const questionnaireResponses = pgTable("questionnaire_responses", {
@@ -81,6 +97,7 @@ export const insertJobOpportunitySchema = createInsertSchema(jobOpportunities).o
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
+export type UpsertUser = typeof users.$inferInsert;
 export type QuestionnaireResponse = typeof questionnaireResponses.$inferSelect;
 export type InsertQuestionnaireResponse = z.infer<typeof insertQuestionnaireResponseSchema>;
 export type UserPreferences = typeof userPreferences.$inferSelect;
