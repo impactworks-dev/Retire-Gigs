@@ -88,7 +88,10 @@ export default function Dashboard() {
         if (locationFilter === "remote" && !jobLocation.includes("remote")) {
           return false;
         }
-        if (locationFilter === "local" && jobLocation.includes("remote")) {
+        if (locationFilter === "hybrid" && !jobLocation.includes("hybrid")) {
+          return false;
+        }
+        if (locationFilter === "local" && (jobLocation.includes("remote") || jobLocation.includes("hybrid"))) {
           return false;
         }
       }
@@ -466,6 +469,7 @@ export default function Dashboard() {
                   <SelectContent>
                     <SelectItem value="all">All locations</SelectItem>
                     <SelectItem value="remote">Remote</SelectItem>
+                    <SelectItem value="hybrid">Hybrid</SelectItem>
                     <SelectItem value="local">Local/On-site</SelectItem>
                   </SelectContent>
                 </Select>
