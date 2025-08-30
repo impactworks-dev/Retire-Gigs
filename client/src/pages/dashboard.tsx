@@ -1,9 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Layout } from "@/components/layout";
 import { JobCard } from "@/components/job-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   Calendar, 
   Mail, 
@@ -18,7 +19,9 @@ import {
   Briefcase,
   Award,
   CheckCircle,
-  Activity
+  Activity,
+  Filter,
+  X
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
@@ -30,6 +33,12 @@ import headerImage from "@assets/Senior Woman Using Smartphone_1756590245643.png
 export default function Dashboard() {
   const { toast } = useToast();
   const { user: authUser, isLoading: authLoading, isAuthenticated } = useAuth();
+  
+  // Filter states
+  const [matchScoreFilter, setMatchScoreFilter] = useState<string>("all");
+  const [scheduleFilter, setScheduleFilter] = useState<string>("all");
+  const [locationFilter, setLocationFilter] = useState<string>("all");
+  const [tagFilter, setTagFilter] = useState<string>("all");
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -57,6 +66,55 @@ export default function Dashboard() {
     queryKey: ["/api/preferences", authUser?.id],
     enabled: !!authUser?.id,
   });
+
+  // Filter jobs based on selected filters
+  const filteredJobs = useMemo(() => {
+    if (!jobs) return [];
+    
+    return jobs.filter((job) => {
+      // Match Score filter
+      if (matchScoreFilter !== "all" && job.matchScore !== matchScoreFilter) {
+        return false;
+      }
+      
+      // Schedule filter
+      if (scheduleFilter !== "all" && !job.schedule.toLowerCase().includes(scheduleFilter.toLowerCase())) {
+        return false;
+      }
+      
+      // Location filter
+      if (locationFilter !== "all") {
+        const jobLocation = job.location.toLowerCase();
+        if (locationFilter === "remote" && !jobLocation.includes("remote")) {
+          return false;
+        }
+        if (locationFilter === "local" && jobLocation.includes("remote")) {
+          return false;
+        }
+      }
+      
+      // Tag filter
+      if (tagFilter !== "all") {
+        const jobTags = Array.isArray(job.tags) ? job.tags : [];
+        if (!jobTags.includes(tagFilter)) {
+          return false;
+        }
+      }
+      
+      return true;
+    });
+  }, [jobs, matchScoreFilter, scheduleFilter, locationFilter, tagFilter]);
+
+  // Clear all filters
+  const clearFilters = () => {
+    setMatchScoreFilter("all");
+    setScheduleFilter("all");
+    setLocationFilter("all");
+    setTagFilter("all");
+  };
+
+  // Check if any filters are active
+  const hasActiveFilters = matchScoreFilter !== "all" || scheduleFilter !== "all" || locationFilter !== "all" || tagFilter !== "all";
 
   if (authLoading || jobsLoading) {
     return (
@@ -332,14 +390,115 @@ export default function Dashboard() {
             </p>
           </div>
           <Badge variant="secondary" className="text-lg px-4 py-2">
-            {jobs.length} opportunities
+            {filteredJobs.length} of {jobs.length} opportunities
           </Badge>
         </div>
 
+        {/* Filtering Options */}
+        <Card className="mb-6">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center">
+                <Filter className="w-5 h-5 mr-2 text-gray-600" />
+                <h3 className="text-lg font-semibold text-gray-900">Filter Jobs</h3>
+              </div>
+              {hasActiveFilters && (
+                <Button
+                  onClick={clearFilters}
+                  variant="outline"
+                  size="sm"
+                  className="text-gray-600"
+                  data-testid="button-clear-filters"
+                >
+                  <X className="w-4 h-4 mr-2" />
+                  Clear Filters
+                </Button>
+              )}
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Match Score Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Match Quality
+                </label>
+                <Select value={matchScoreFilter} onValueChange={setMatchScoreFilter}>
+                  <SelectTrigger data-testid="select-match-score">
+                    <SelectValue placeholder="All matches" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All matches</SelectItem>
+                    <SelectItem value="great">Great matches</SelectItem>
+                    <SelectItem value="good">Good matches</SelectItem>
+                    <SelectItem value="potential">Potential matches</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Schedule Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Schedule Type
+                </label>
+                <Select value={scheduleFilter} onValueChange={setScheduleFilter}>
+                  <SelectTrigger data-testid="select-schedule">
+                    <SelectValue placeholder="All schedules" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All schedules</SelectItem>
+                    <SelectItem value="part-time">Part-time</SelectItem>
+                    <SelectItem value="full-time">Full-time</SelectItem>
+                    <SelectItem value="flexible">Flexible</SelectItem>
+                    <SelectItem value="seasonal">Seasonal</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Location Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Work Location
+                </label>
+                <Select value={locationFilter} onValueChange={setLocationFilter}>
+                  <SelectTrigger data-testid="select-location">
+                    <SelectValue placeholder="All locations" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All locations</SelectItem>
+                    <SelectItem value="remote">Remote</SelectItem>
+                    <SelectItem value="local">Local/On-site</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Job Category Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Job Category
+                </label>
+                <Select value={tagFilter} onValueChange={setTagFilter}>
+                  <SelectTrigger data-testid="select-category">
+                    <SelectValue placeholder="All categories" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All categories</SelectItem>
+                    <SelectItem value="outdoor">Outdoor work</SelectItem>
+                    <SelectItem value="helping">Helping others</SelectItem>
+                    <SelectItem value="creative">Creative work</SelectItem>
+                    <SelectItem value="social">Social work</SelectItem>
+                    <SelectItem value="hands-on">Hands-on work</SelectItem>
+                    <SelectItem value="professional">Professional</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Job Listings */}
-        {jobs.length > 0 ? (
+        {filteredJobs.length > 0 ? (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            {jobs.map((job) => (
+            {filteredJobs.map((job) => (
               <JobCard
                 key={job.id}
                 job={job}
@@ -352,6 +511,23 @@ export default function Dashboard() {
               />
             ))}
           </div>
+        ) : jobs.length > 0 ? (
+          <Card className="mb-8">
+            <CardContent className="p-12 text-center">
+              <Filter className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">No Matching Jobs</h3>
+              <p className="text-gray-600 mb-6">
+                No jobs match your current filters. Try adjusting your filter criteria to see more opportunities.
+              </p>
+              <Button 
+                onClick={clearFilters}
+                variant="outline" 
+                data-testid="button-clear-filters-empty"
+              >
+                Clear All Filters
+              </Button>
+            </CardContent>
+          </Card>
         ) : (
           <Card className="mb-8">
             <CardContent className="p-12 text-center">
