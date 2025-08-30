@@ -279,24 +279,20 @@ export default function Dashboard() {
                 </Button>
               </Link>
 
-              <Button
-                variant="outline"
-                size="lg"
-                className="w-full justify-start"
-                data-testid="button-retake-questionnaire"
-                onClick={() => {
-                  toast({
-                    title: "Questionnaire",
-                    description: "Retake questionnaire feature coming soon!",
-                  });
-                }}
-              >
-                <Target className="w-5 h-5 mr-3" />
-                <div className="text-left">
-                  <div className="font-medium">Retake Assessment</div>
-                  <div className="text-sm text-gray-600">Update your answers</div>
-                </div>
-              </Button>
+              <Link href="/retake-assessment">
+                <Button
+                  variant="outline"
+                  size="lg"
+                  className="w-full justify-start"
+                  data-testid="button-retake-questionnaire"
+                >
+                  <Target className="w-5 h-5 mr-3" />
+                  <div className="text-left">
+                    <div className="font-medium">Retake Assessment</div>
+                    <div className="text-sm text-gray-600">Update your answers</div>
+                  </div>
+                </Button>
+              </Link>
 
               <div className="pt-4 border-t">
                 <h4 className="font-medium text-gray-900 mb-3">Your Preferences</h4>
