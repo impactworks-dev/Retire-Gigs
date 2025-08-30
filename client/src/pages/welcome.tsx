@@ -7,7 +7,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import seniorWomanImage from "@assets/Senior Woman Using Smartphone_1756590245643.png";
+import heroImage from "@assets/image_1756592527496.png";
 
 export default function Welcome() {
   const [, setLocation] = useLocation();
@@ -28,45 +28,56 @@ export default function Welcome() {
   return (
     <Layout>
       <div className="max-w-4xl mx-auto px-6 py-12">
-        {/* Hero Header */}
+        {/* Hero Header - matches uploaded design */}
         <div className="relative mb-12">
-          <div className="rounded-2xl overflow-hidden bg-gradient-to-r from-blue-600 to-blue-800 shadow-xl">
-            <div className="flex flex-col lg:flex-row items-center">
-              {/* Text Content */}
-              <div className="flex-1 p-8 lg:p-12 text-white">
+          <div 
+            className="rounded-2xl overflow-hidden shadow-2xl relative"
+            style={{
+              background: 'linear-gradient(135deg, #4F46E5 0%, #3B82F6 50%, #1E3A8A 100%)'
+            }}
+          >
+            {/* Background overlay to match design */}
+            <div className="absolute inset-0 bg-black/10"></div>
+            
+            <div className="relative z-10">
+              {/* Text Content - Top Section */}
+              <div className="px-8 lg:px-16 pt-12 lg:pt-16 pb-8 text-white">
                 <h1 
-                  className="text-3xl lg:text-4xl font-bold mb-4"
+                  className="text-4xl lg:text-5xl font-bold mb-6 leading-tight"
                   data-testid="text-hero-title"
                 >
                   Find Meaningful Work After 55
                 </h1>
                 <p 
-                  className="text-xl mb-6 text-blue-100 leading-relaxed"
+                  className="text-xl lg:text-2xl mb-8 text-white/90 leading-relaxed max-w-4xl"
                   data-testid="text-hero-description"
                 >
                   Connect with opportunities that match your experience, schedule, and goals. We'll help you find the perfect fit for your retirement lifestyle.
                 </p>
-                <div className="flex flex-wrap gap-3">
-                  <div className="flex items-center text-blue-100">
-                    <CheckCircle className="w-5 h-5 mr-2" />
-                    Flexible schedules
+                
+                {/* Feature Points */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                  <div className="flex items-center text-white/90 text-lg">
+                    <CheckCircle className="w-6 h-6 mr-3 text-white flex-shrink-0" />
+                    <span>Flexible schedules</span>
                   </div>
-                  <div className="flex items-center text-blue-100">
-                    <CheckCircle className="w-5 h-5 mr-2" />
-                    Local opportunities
+                  <div className="flex items-center text-white/90 text-lg">
+                    <CheckCircle className="w-6 h-6 mr-3 text-white flex-shrink-0" />
+                    <span>Local opportunities</span>
                   </div>
-                  <div className="flex items-center text-blue-100">
-                    <CheckCircle className="w-5 h-5 mr-2" />
-                    Age-friendly employers
+                  <div className="flex items-center text-white/90 text-lg">
+                    <CheckCircle className="w-6 h-6 mr-3 text-white flex-shrink-0" />
+                    <span>Age-friendly employers</span>
                   </div>
                 </div>
               </div>
-              {/* Header Image */}
-              <div className="lg:w-80 lg:h-80 w-full h-48">
+              
+              {/* Hero Image - Bottom Section */}
+              <div className="relative">
                 <img 
-                  src={seniorWomanImage}
-                  alt="Senior woman comfortably using smartphone on couch"
-                  className="w-full h-full object-cover"
+                  src={heroImage}
+                  alt="Senior woman using smartphone, representing modern job searching"
+                  className="w-full h-64 lg:h-80 object-cover object-center"
                   data-testid="img-hero"
                 />
               </div>
