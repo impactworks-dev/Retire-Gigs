@@ -126,6 +126,10 @@ export class MemStorage implements IStorage {
       email: null,
       firstName: null,
       lastName: null,
+      streetAddress: null,
+      city: null,
+      state: null,
+      zipCode: null,
       profileImageUrl: null,
       createdAt: new Date(),
       updatedAt: new Date()
@@ -146,6 +150,10 @@ export class MemStorage implements IStorage {
       email: userData.email || null,
       firstName: userData.firstName || null,
       lastName: userData.lastName || null,
+      streetAddress: userData.streetAddress || null,
+      city: userData.city || null,
+      state: userData.state || null,
+      zipCode: userData.zipCode || null,
       profileImageUrl: userData.profileImageUrl || null,
       createdAt: existingUser?.createdAt || new Date(),
       updatedAt: new Date()

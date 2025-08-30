@@ -33,7 +33,7 @@ export default function Questionnaire() {
   }, [isAuthenticated, isLoading, toast]);
 
   const saveResponsesMutation = useMutation({
-    mutationFn: async (data: { answers: QuestionnaireAnswers; contactInfo?: { firstName: string; lastName: string; email: string; address: string } }) => {
+    mutationFn: async (data: { answers: QuestionnaireAnswers; contactInfo?: { firstName: string; lastName: string; email: string; streetAddress: string; city: string; state: string; zipCode: string } }) => {
       if (!user?.id) {
         throw new Error("User ID not found");
       }
@@ -83,7 +83,7 @@ export default function Questionnaire() {
     setShowContactForm(true);
   };
 
-  const handleContactInfoComplete = (contactInfo: { firstName: string; lastName: string; email: string; address: string }) => {
+  const handleContactInfoComplete = (contactInfo: { firstName: string; lastName: string; email: string; streetAddress: string; city: string; state: string; zipCode: string }) => {
     saveResponsesMutation.mutate({ answers: questionnaireAnswers, contactInfo });
   };
 

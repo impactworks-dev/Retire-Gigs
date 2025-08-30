@@ -11,7 +11,10 @@ interface ContactInfoFormProps {
     firstName: string;
     lastName: string;
     email: string;
-    address: string;
+    streetAddress: string;
+    city: string;
+    state: string;
+    zipCode: string;
   }) => void;
 }
 
@@ -21,7 +24,10 @@ export function ContactInfoForm({ onComplete }: ContactInfoFormProps) {
     firstName: user?.firstName || "",
     lastName: user?.lastName || "",
     email: user?.email || "",
-    address: ""
+    streetAddress: "",
+    city: "",
+    state: "",
+    zipCode: ""
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -29,7 +35,7 @@ export function ContactInfoForm({ onComplete }: ContactInfoFormProps) {
     onComplete(formData);
   };
 
-  const isValid = formData.firstName && formData.lastName && formData.email && formData.address;
+  const isValid = formData.firstName && formData.lastName && formData.email && formData.streetAddress && formData.city && formData.state && formData.zipCode;
 
   return (
     <div className="max-w-2xl mx-auto px-6 py-8">
@@ -100,24 +106,80 @@ export function ContactInfoForm({ onComplete }: ContactInfoFormProps) {
               </p>
             </div>
 
-            <div>
-              <Label htmlFor="address" className="text-lg font-medium flex items-center mb-2">
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium flex items-center">
                 <MapPin className="w-4 h-4 mr-2" />
                 Your Address
-              </Label>
-              <Input
-                id="address"
-                type="text"
-                value={formData.address}
-                onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
-                className="text-lg py-3"
-                placeholder="Street address, City, State, ZIP"
-                data-testid="input-address"
-                required
-              />
-              <p className="text-sm text-gray-500 mt-1">
+              </h3>
+              <p className="text-sm text-gray-500">
                 This helps us find jobs close to you and reduces commute time.
               </p>
+              
+              <div>
+                <Label htmlFor="streetAddress" className="text-base font-medium mb-2 block">
+                  Street Address
+                </Label>
+                <Input
+                  id="streetAddress"
+                  type="text"
+                  value={formData.streetAddress}
+                  onChange={(e) => setFormData(prev => ({ ...prev, streetAddress: e.target.value }))}
+                  className="text-lg py-3"
+                  placeholder="123 Main Street"
+                  data-testid="input-street-address"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <Label htmlFor="city" className="text-base font-medium mb-2 block">
+                    City
+                  </Label>
+                  <Input
+                    id="city"
+                    type="text"
+                    value={formData.city}
+                    onChange={(e) => setFormData(prev => ({ ...prev, city: e.target.value }))}
+                    className="text-lg py-3"
+                    placeholder="Your City"
+                    data-testid="input-city"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="state" className="text-base font-medium mb-2 block">
+                    State
+                  </Label>
+                  <Input
+                    id="state"
+                    type="text"
+                    value={formData.state}
+                    onChange={(e) => setFormData(prev => ({ ...prev, state: e.target.value }))}
+                    className="text-lg py-3"
+                    placeholder="CA"
+                    data-testid="input-state"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="zipCode" className="text-base font-medium mb-2 block">
+                    ZIP Code
+                  </Label>
+                  <Input
+                    id="zipCode"
+                    type="text"
+                    value={formData.zipCode}
+                    onChange={(e) => setFormData(prev => ({ ...prev, zipCode: e.target.value }))}
+                    className="text-lg py-3"
+                    placeholder="12345"
+                    data-testid="input-zip-code"
+                    required
+                  />
+                </div>
+              </div>
             </div>
 
             <div className="pt-6">

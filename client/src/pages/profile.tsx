@@ -24,7 +24,10 @@ export default function Profile() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
-  const [address, setAddress] = useState("");
+  const [streetAddress, setStreetAddress] = useState("");
+  const [city, setCity] = useState("");
+  const [state, setState] = useState("");
+  const [zipCode, setZipCode] = useState("");
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [preferredJobTypes, setPreferredJobTypes] = useState<string[]>([]);
   const [preferredLocations, setPreferredLocations] = useState<string[]>([]);
@@ -54,7 +57,7 @@ export default function Profile() {
 
   // Update profile mutation
   const updateProfileMutation = useMutation({
-    mutationFn: async (data: { firstName?: string; lastName?: string; email?: string; address?: string }) => {
+    mutationFn: async (data: { firstName?: string; lastName?: string; email?: string; streetAddress?: string; city?: string; state?: string; zipCode?: string }) => {
       if (!authUser?.id) throw new Error("User ID not found");
       
       const response = await apiRequest("PATCH", `/api/users/${authUser.id}`, data);
@@ -142,7 +145,10 @@ export default function Profile() {
       setFirstName(authUser.firstName || "");
       setLastName(authUser.lastName || "");
       setEmail(authUser.email || "");
-      setAddress(authUser.address || "");
+      setStreetAddress(authUser.streetAddress || "");
+      setCity(authUser.city || "");
+      setState(authUser.state || "");
+      setZipCode(authUser.zipCode || "");
     }
   }, [authUser]);
 
@@ -166,7 +172,7 @@ export default function Profile() {
   };
 
   const handleProfileSave = () => {
-    updateProfileMutation.mutate({ firstName, lastName, email, address });
+    updateProfileMutation.mutate({ firstName, lastName, email, streetAddress, city, state, zipCode });
   };
 
   const handleJobTypeToggle = (jobType: string, checked: boolean) => {
@@ -298,19 +304,59 @@ export default function Profile() {
                         data-testid="input-email-edit"
                       />
                     </div>
-                    <div>
-                      <Label htmlFor="address" className="flex items-center">
+                    <div className="space-y-4">
+                      <h4 className="font-medium flex items-center">
                         <MapPin className="w-4 h-4 mr-2" />
                         Address
-                      </Label>
-                      <Input
-                        id="address"
-                        value={address}
-                        onChange={(e) => setAddress(e.target.value)}
-                        placeholder="Street address, City, State, ZIP"
-                        data-testid="input-address-edit"
-                      />
-                      <p className="text-sm text-gray-500 mt-1">
+                      </h4>
+                      
+                      <div>
+                        <Label htmlFor="streetAddress">Street Address</Label>
+                        <Input
+                          id="streetAddress"
+                          value={streetAddress}
+                          onChange={(e) => setStreetAddress(e.target.value)}
+                          placeholder="123 Main Street"
+                          data-testid="input-street-address-edit"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                          <Label htmlFor="city">City</Label>
+                          <Input
+                            id="city"
+                            value={city}
+                            onChange={(e) => setCity(e.target.value)}
+                            placeholder="Your City"
+                            data-testid="input-city-edit"
+                          />
+                        </div>
+
+                        <div>
+                          <Label htmlFor="state">State</Label>
+                          <Input
+                            id="state"
+                            value={state}
+                            onChange={(e) => setState(e.target.value)}
+                            placeholder="CA"
+                            data-testid="input-state-edit"
+                          />
+                        </div>
+
+                        <div>
+                          <Label htmlFor="zipCode">ZIP Code</Label>
+                          <Input
+                            id="zipCode"
+                            value={zipCode}
+                            onChange={(e) => setZipCode(e.target.value)}
+                            placeholder="12345"
+                            data-testid="input-zip-code-edit"
+                          />
+                        </div>
+                      </div>
+
+                      <p className="text-sm text-gray-500">
                         This helps us find jobs close to you.
                       </p>
                     </div>
@@ -329,7 +375,10 @@ export default function Profile() {
                           setFirstName(authUser?.firstName || "");
                           setLastName(authUser?.lastName || "");
                           setEmail(authUser?.email || "");
-                          setAddress(authUser?.address || "");
+                          setStreetAddress(authUser?.streetAddress || "");
+                          setCity(authUser?.city || "");
+                          setState(authUser?.state || "");
+                          setZipCode(authUser?.zipCode || "");
                         }}
                         variant="outline"
                         size="sm"
@@ -356,11 +405,16 @@ export default function Profile() {
                         {authUser?.email || "Email not provided"}
                       </span>
                     </div>
-                    {authUser?.address && (
+                    {(authUser?.streetAddress || authUser?.city || authUser?.state || authUser?.zipCode) && (
                       <div className="flex items-center text-gray-600">
                         <MapPin className="w-4 h-4 mr-2" />
                         <span data-testid="text-user-address">
-                          {authUser.address}
+                          {[
+                            authUser?.streetAddress,
+                            authUser?.city,
+                            authUser?.state,
+                            authUser?.zipCode
+                          ].filter(Boolean).join(", ")}
                         </span>
                       </div>
                     )}
