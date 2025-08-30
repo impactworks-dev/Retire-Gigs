@@ -28,9 +28,21 @@ export default function Welcome() {
   return (
     <Layout>
       <div className="max-w-4xl mx-auto px-6 py-12">
+        {/* Hero Image Section */}
+        <div className="relative">
+          <div className="rounded-t-2xl overflow-hidden shadow-lg">
+            <img 
+              src={seniorWomanImage}
+              alt="Senior woman comfortably using smartphone on couch"
+              className="w-full h-64 lg:h-80 object-cover"
+              data-testid="img-hero"
+            />
+          </div>
+        </div>
+
         {/* Hero Header - Blue Information Section */}
-        <div className="relative mb-8">
-          <div className="rounded-2xl bg-gradient-to-r from-blue-600 to-blue-800 shadow-xl p-8 lg:p-12">
+        <div className="relative mb-12">
+          <div className="rounded-b-2xl bg-gradient-to-r from-blue-600 to-blue-800 shadow-xl p-8 lg:p-12">
             <div className="text-white">
               <h1 
                 className="text-3xl lg:text-4xl font-bold mb-4"
@@ -59,18 +71,6 @@ export default function Welcome() {
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-
-        {/* Hero Image Section */}
-        <div className="relative mb-12">
-          <div className="rounded-2xl overflow-hidden shadow-lg">
-            <img 
-              src={seniorWomanImage}
-              alt="Senior woman comfortably using smartphone on couch"
-              className="w-full h-64 lg:h-80 object-cover"
-              data-testid="img-hero"
-            />
           </div>
         </div>
 
