@@ -7,7 +7,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import seniorWomanImage from "@assets/generated_images/Senior_woman_using_smartphone_715d76e9.png";
+import seniorWomanImage from "@assets/Senior Woman Using Smartphone_1756590245643.png";
 
 export default function Welcome() {
   const [, setLocation] = useLocation();
@@ -27,28 +27,51 @@ export default function Welcome() {
 
   return (
     <Layout>
-      <div className="max-w-2xl mx-auto px-6 py-12">
-        <div className="text-center mb-12">
-          {/* Hero Image */}
-          <img 
-            src={seniorWomanImage} 
-            alt="Senior woman comfortably using smartphone on couch" 
-            className="rounded-2xl shadow-lg w-full h-64 object-cover mb-8"
-            data-testid="img-hero"
-          />
-          
-          <h2 
-            className="text-3xl font-bold text-gray-900 mb-4"
-            data-testid="text-hero-title"
-          >
-            Find Meaningful Work After 55
-          </h2>
-          <p 
-            className="text-xl text-gray-600 mb-8 leading-relaxed"
-            data-testid="text-hero-description"
-          >
-            Connect with opportunities that match your experience, schedule, and goals. We'll help you find the perfect fit.
-          </p>
+      <div className="max-w-4xl mx-auto px-6 py-12">
+        {/* Hero Header */}
+        <div className="relative mb-12">
+          <div className="rounded-2xl overflow-hidden bg-gradient-to-r from-blue-600 to-blue-800 shadow-xl">
+            <div className="flex flex-col lg:flex-row items-center">
+              {/* Text Content */}
+              <div className="flex-1 p-8 lg:p-12 text-white">
+                <h1 
+                  className="text-3xl lg:text-4xl font-bold mb-4"
+                  data-testid="text-hero-title"
+                >
+                  Find Meaningful Work After 55
+                </h1>
+                <p 
+                  className="text-xl mb-6 text-blue-100 leading-relaxed"
+                  data-testid="text-hero-description"
+                >
+                  Connect with opportunities that match your experience, schedule, and goals. We'll help you find the perfect fit for your retirement lifestyle.
+                </p>
+                <div className="flex flex-wrap gap-3">
+                  <div className="flex items-center text-blue-100">
+                    <CheckCircle className="w-5 h-5 mr-2" />
+                    Flexible schedules
+                  </div>
+                  <div className="flex items-center text-blue-100">
+                    <CheckCircle className="w-5 h-5 mr-2" />
+                    Local opportunities
+                  </div>
+                  <div className="flex items-center text-blue-100">
+                    <CheckCircle className="w-5 h-5 mr-2" />
+                    Age-friendly employers
+                  </div>
+                </div>
+              </div>
+              {/* Header Image */}
+              <div className="lg:w-80 lg:h-80 w-full h-48">
+                <img 
+                  src={seniorWomanImage}
+                  alt="Senior woman comfortably using smartphone on couch"
+                  className="w-full h-full object-cover"
+                  data-testid="img-hero"
+                />
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Age Verification */}
