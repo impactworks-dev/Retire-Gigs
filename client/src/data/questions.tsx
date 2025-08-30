@@ -22,7 +22,8 @@ import {
   Hammer,
   Shield,
   Film,
-  ShoppingCart
+  ShoppingCart,
+  Mail
 } from "lucide-react";
 import type { Question } from "@/types/questionnaire";
 

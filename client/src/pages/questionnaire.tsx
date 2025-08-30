@@ -1,6 +1,7 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Layout } from "@/components/layout";
 import { QuestionnaireFlow } from "@/components/questionnaire-flow";
+import { ContactInfoForm } from "@/components/contact-info-form";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
@@ -13,6 +14,8 @@ export default function Questionnaire() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { user, isAuthenticated, isLoading } = useAuth();
+  const [showContactForm, setShowContactForm] = useState(false);
+  const [questionnaireAnswers, setQuestionnaireAnswers] = useState<QuestionnaireAnswers>({});
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -30,16 +33,23 @@ export default function Questionnaire() {
   }, [isAuthenticated, isLoading, toast]);
 
   const saveResponsesMutation = useMutation({
-    mutationFn: async (answers: QuestionnaireAnswers) => {
+    mutationFn: async (data: { answers: QuestionnaireAnswers; contactInfo?: { firstName: string; lastName: string; email: string; address: string } }) => {
       if (!user?.id) {
         throw new Error("User ID not found");
       }
       
-      const response = await apiRequest("POST", "/api/questionnaire", {
+      // Save questionnaire responses
+      await apiRequest("POST", "/api/questionnaire", {
         userId: user.id,
-        responses: answers
+        responses: data.answers
       });
-      return response.json();
+
+      // Save contact info if provided
+      if (data.contactInfo) {
+        await apiRequest("PATCH", `/api/users/${user.id}`, data.contactInfo);
+      }
+
+      return { success: true };
     },
     onSuccess: () => {
       toast({
@@ -69,7 +79,12 @@ export default function Questionnaire() {
   });
 
   const handleQuestionnaireComplete = (answers: QuestionnaireAnswers) => {
-    saveResponsesMutation.mutate(answers);
+    setQuestionnaireAnswers(answers);
+    setShowContactForm(true);
+  };
+
+  const handleContactInfoComplete = (contactInfo: { firstName: string; lastName: string; email: string; address: string }) => {
+    saveResponsesMutation.mutate({ answers: questionnaireAnswers, contactInfo });
   };
 
   if (isLoading) {
@@ -91,7 +106,11 @@ export default function Questionnaire() {
 
   return (
     <Layout>
-      <QuestionnaireFlow onComplete={handleQuestionnaireComplete} />
+      {showContactForm ? (
+        <ContactInfoForm onComplete={handleContactInfoComplete} />
+      ) : (
+        <QuestionnaireFlow onComplete={handleQuestionnaireComplete} />
+      )}
     </Layout>
   );
 }

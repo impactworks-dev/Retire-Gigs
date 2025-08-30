@@ -23,6 +23,8 @@ export default function Profile() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+  const [address, setAddress] = useState("");
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [preferredJobTypes, setPreferredJobTypes] = useState<string[]>([]);
   const [preferredLocations, setPreferredLocations] = useState<string[]>([]);
@@ -52,7 +54,7 @@ export default function Profile() {
 
   // Update profile mutation
   const updateProfileMutation = useMutation({
-    mutationFn: async (data: { firstName?: string; lastName?: string }) => {
+    mutationFn: async (data: { firstName?: string; lastName?: string; email?: string; address?: string }) => {
       if (!authUser?.id) throw new Error("User ID not found");
       
       const response = await apiRequest("PATCH", `/api/users/${authUser.id}`, data);
@@ -139,6 +141,8 @@ export default function Profile() {
     if (authUser) {
       setFirstName(authUser.firstName || "");
       setLastName(authUser.lastName || "");
+      setEmail(authUser.email || "");
+      setAddress(authUser.address || "");
     }
   }, [authUser]);
 
@@ -162,7 +166,7 @@ export default function Profile() {
   };
 
   const handleProfileSave = () => {
-    updateProfileMutation.mutate({ firstName, lastName });
+    updateProfileMutation.mutate({ firstName, lastName, email, address });
   };
 
   const handleJobTypeToggle = (jobType: string, checked: boolean) => {
@@ -280,6 +284,36 @@ export default function Profile() {
                         />
                       </div>
                     </div>
+                    <div>
+                      <Label htmlFor="email" className="flex items-center">
+                        <Mail className="w-4 h-4 mr-2" />
+                        Email Address
+                      </Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="your.email@example.com"
+                        data-testid="input-email-edit"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="address" className="flex items-center">
+                        <MapPin className="w-4 h-4 mr-2" />
+                        Address
+                      </Label>
+                      <Input
+                        id="address"
+                        value={address}
+                        onChange={(e) => setAddress(e.target.value)}
+                        placeholder="Street address, City, State, ZIP"
+                        data-testid="input-address-edit"
+                      />
+                      <p className="text-sm text-gray-500 mt-1">
+                        This helps us find jobs close to you.
+                      </p>
+                    </div>
                     <div className="flex gap-2">
                       <Button
                         onClick={handleProfileSave}
@@ -294,6 +328,8 @@ export default function Profile() {
                           setIsEditingProfile(false);
                           setFirstName(authUser?.firstName || "");
                           setLastName(authUser?.lastName || "");
+                          setEmail(authUser?.email || "");
+                          setAddress(authUser?.address || "");
                         }}
                         variant="outline"
                         size="sm"
@@ -304,7 +340,7 @@ export default function Profile() {
                     </div>
                   </div>
                 ) : (
-                  <div>
+                  <div className="space-y-2">
                     <h3 
                       className="text-xl font-semibold text-gray-900"
                       data-testid="text-user-name"
@@ -314,13 +350,21 @@ export default function Profile() {
                         : authUser?.email || 'User'
                       }
                     </h3>
-                    <p 
-                      className="text-gray-600"
-                      data-testid="text-user-email"
-                    >
-                      {authUser?.email}
-                    </p>
-                    <Badge variant="secondary" className="mt-1">
+                    <div className="flex items-center text-gray-600">
+                      <Mail className="w-4 h-4 mr-2" />
+                      <span data-testid="text-user-email">
+                        {authUser?.email || "Email not provided"}
+                      </span>
+                    </div>
+                    {authUser?.address && (
+                      <div className="flex items-center text-gray-600">
+                        <MapPin className="w-4 h-4 mr-2" />
+                        <span data-testid="text-user-address">
+                          {authUser.address}
+                        </span>
+                      </div>
+                    )}
+                    <Badge variant="secondary" className="mt-2">
                       Age 55+
                     </Badge>
                   </div>
