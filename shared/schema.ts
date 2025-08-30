@@ -37,6 +37,8 @@ export const userPreferences = pgTable("user_preferences", {
   userId: varchar("user_id").references(() => users.id).notNull(),
   notificationsEnabled: boolean("notifications_enabled").default(true),
   schedulePreference: text("schedule_preference").default("weekly"), // daily, weekly, biweekly
+  preferredJobTypes: jsonb("preferred_job_types"), // Array of job types: "outdoorwork", "deskwork", etc.
+  preferredLocations: jsonb("preferred_locations"), // Array of location preferences: "remote", "closetohome", etc.
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 

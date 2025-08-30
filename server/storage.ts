@@ -178,7 +178,9 @@ export class MemStorage implements IStorage {
       id,
       updatedAt: new Date(),
       notificationsEnabled: preferences.notificationsEnabled ?? true,
-      schedulePreference: preferences.schedulePreference || "weekly"
+      schedulePreference: preferences.schedulePreference || "weekly",
+      preferredJobTypes: preferences.preferredJobTypes || null,
+      preferredLocations: preferences.preferredLocations || null
     };
     this.userPreferences.set(id, userPreferences);
     return userPreferences;

@@ -5,7 +5,10 @@ import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { User, Settings, Calendar, Mail, LogOut } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { User, Settings, Calendar, Mail, LogOut, Edit3, MapPin, Briefcase } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -13,17 +16,21 @@ import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import type { UserPreferences, User as UserType } from "@shared/schema";
 import type { SchedulePreference } from "@/types/questionnaire";
-import { useEffect as useRedirectEffect } from "react";
 
 export default function Profile() {
   const { user: authUser, isLoading: authLoading, isAuthenticated } = useAuth();
   const [selectedSchedule, setSelectedSchedule] = useState<SchedulePreference>("weekly");
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [preferredJobTypes, setPreferredJobTypes] = useState<string[]>([]);
+  const [preferredLocations, setPreferredLocations] = useState<string[]>([]);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
   // Redirect to login if not authenticated
-  useRedirectEffect(() => {
+  useEffect(() => {
     if (!authLoading && !isAuthenticated) {
       toast({
         title: "Unauthorized",
@@ -43,9 +50,50 @@ export default function Profile() {
     enabled: !!authUser?.id,
   });
 
+  // Update profile mutation
+  const updateProfileMutation = useMutation({
+    mutationFn: async (data: { firstName?: string; lastName?: string }) => {
+      if (!authUser?.id) throw new Error("User ID not found");
+      
+      const response = await apiRequest("PATCH", `/api/users/${authUser.id}`, data);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+      setIsEditingProfile(false);
+      toast({
+        title: "Profile updated",
+        description: "Your profile information has been saved.",
+      });
+    },
+    onError: (error) => {
+      if (isUnauthorizedError(error)) {
+        toast({
+          title: "Unauthorized",
+          description: "You are logged out. Logging in again...",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 500);
+        return;
+      }
+      toast({
+        title: "Error",
+        description: "Failed to update profile. Please try again.",
+        variant: "destructive",
+      });
+    }
+  });
+
   // Update preferences mutation
   const updatePreferencesMutation = useMutation({
-    mutationFn: async (data: { schedulePreference?: SchedulePreference; notificationsEnabled?: boolean }) => {
+    mutationFn: async (data: { 
+      schedulePreference?: SchedulePreference; 
+      notificationsEnabled?: boolean;
+      preferredJobTypes?: string[];
+      preferredLocations?: string[];
+    }) => {
       if (!authUser?.id) throw new Error("User ID not found");
       
       if (preferences) {
@@ -86,11 +134,20 @@ export default function Profile() {
     }
   });
 
-  // Initialize preferences from API
+  // Initialize state from API data
+  useEffect(() => {
+    if (authUser) {
+      setFirstName(authUser.firstName || "");
+      setLastName(authUser.lastName || "");
+    }
+  }, [authUser]);
+
   useEffect(() => {
     if (preferences) {
       setSelectedSchedule(preferences.schedulePreference as SchedulePreference);
       setNotificationsEnabled(preferences.notificationsEnabled ?? true);
+      setPreferredJobTypes((preferences.preferredJobTypes as string[]) || []);
+      setPreferredLocations((preferences.preferredLocations as string[]) || []);
     }
   }, [preferences]);
 
@@ -102,6 +159,26 @@ export default function Profile() {
   const handleNotificationsToggle = (enabled: boolean) => {
     setNotificationsEnabled(enabled);
     updatePreferencesMutation.mutate({ notificationsEnabled: enabled });
+  };
+
+  const handleProfileSave = () => {
+    updateProfileMutation.mutate({ firstName, lastName });
+  };
+
+  const handleJobTypeToggle = (jobType: string, checked: boolean) => {
+    const newJobTypes = checked 
+      ? [...preferredJobTypes, jobType]
+      : preferredJobTypes.filter(type => type !== jobType);
+    setPreferredJobTypes(newJobTypes);
+    updatePreferencesMutation.mutate({ preferredJobTypes: newJobTypes });
+  };
+
+  const handleLocationToggle = (location: string, checked: boolean) => {
+    const newLocations = checked 
+      ? [...preferredLocations, location]
+      : preferredLocations.filter(loc => loc !== location);
+    setPreferredLocations(newLocations);
+    updatePreferencesMutation.mutate({ preferredLocations: newLocations });
   };
 
   const handleLogout = () => {
@@ -151,13 +228,24 @@ export default function Profile() {
         {/* Profile Information */}
         <Card className="mb-8">
           <CardHeader>
-            <CardTitle className="flex items-center">
-              <User className="w-5 h-5 mr-2" />
-              Profile Information
+            <CardTitle className="flex items-center justify-between">
+              <div className="flex items-center">
+                <User className="w-5 h-5 mr-2" />
+                Profile Information
+              </div>
+              <Button
+                onClick={() => setIsEditingProfile(!isEditingProfile)}
+                variant="outline"
+                size="sm"
+                data-testid="button-edit-profile"
+              >
+                <Edit3 className="w-4 h-4 mr-2" />
+                {isEditingProfile ? "Cancel" : "Edit"}
+              </Button>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="flex items-center space-x-4">
+            <div className="flex items-start space-x-4">
               <Avatar className="w-16 h-16">
                 <AvatarImage 
                   src={authUser?.profileImageUrl || undefined} 
@@ -167,25 +255,76 @@ export default function Profile() {
                   {authUser?.firstName?.[0] || authUser?.email?.[0]?.toUpperCase() || 'U'}
                 </AvatarFallback>
               </Avatar>
-              <div>
-                <h3 
-                  className="text-xl font-semibold text-gray-900"
-                  data-testid="text-user-name"
-                >
-                  {authUser?.firstName && authUser?.lastName 
-                    ? `${authUser.firstName} ${authUser.lastName}`
-                    : authUser?.email || 'User'
-                  }
-                </h3>
-                <p 
-                  className="text-gray-600"
-                  data-testid="text-user-email"
-                >
-                  {authUser?.email}
-                </p>
-                <Badge variant="secondary" className="mt-1">
-                  Age 55+
-                </Badge>
+              <div className="flex-1">
+                {isEditingProfile ? (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="firstName">First Name</Label>
+                        <Input
+                          id="firstName"
+                          value={firstName}
+                          onChange={(e) => setFirstName(e.target.value)}
+                          placeholder="Enter your first name"
+                          data-testid="input-first-name"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="lastName">Last Name</Label>
+                        <Input
+                          id="lastName"
+                          value={lastName}
+                          onChange={(e) => setLastName(e.target.value)}
+                          placeholder="Enter your last name"
+                          data-testid="input-last-name"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={handleProfileSave}
+                        size="sm"
+                        disabled={updateProfileMutation.isPending}
+                        data-testid="button-save-profile"
+                      >
+                        {updateProfileMutation.isPending ? "Saving..." : "Save Changes"}
+                      </Button>
+                      <Button
+                        onClick={() => {
+                          setIsEditingProfile(false);
+                          setFirstName(authUser?.firstName || "");
+                          setLastName(authUser?.lastName || "");
+                        }}
+                        variant="outline"
+                        size="sm"
+                        data-testid="button-cancel-profile"
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <h3 
+                      className="text-xl font-semibold text-gray-900"
+                      data-testid="text-user-name"
+                    >
+                      {authUser?.firstName && authUser?.lastName 
+                        ? `${authUser.firstName} ${authUser.lastName}`
+                        : authUser?.email || 'User'
+                      }
+                    </h3>
+                    <p 
+                      className="text-gray-600"
+                      data-testid="text-user-email"
+                    >
+                      {authUser?.email}
+                    </p>
+                    <Badge variant="secondary" className="mt-1">
+                      Age 55+
+                    </Badge>
+                  </div>
+                )}
               </div>
             </div>
           </CardContent>
@@ -255,6 +394,70 @@ export default function Profile() {
                     Job opportunities will be sent to <strong>{authUser?.email}</strong> based on your selected schedule.
                   </p>
                 </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Job Preferences */}
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <Briefcase className="w-5 h-5 mr-2" />
+              Job Preferences
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div>
+              <h4 className="font-medium text-gray-900 mb-4">Job Types You're Interested In</h4>
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { id: "outdoor", label: "Outdoor Work", description: "Gardening, landscaping, outdoor activities" },
+                  { id: "helping", label: "Helping Others", description: "Teaching, mentoring, care services" },
+                  { id: "creative", label: "Creative Work", description: "Arts, crafts, design projects" },
+                  { id: "professional", label: "Professional", description: "Office work, consulting, admin" },
+                  { id: "hands-on", label: "Hands-on Work", description: "Building, repairs, manual tasks" },
+                  { id: "social", label: "Social Work", description: "Events, community, customer service" }
+                ].map((jobType) => (
+                  <div key={jobType.id} className="flex items-start space-x-3 p-3 border rounded-lg">
+                    <Checkbox
+                      checked={preferredJobTypes.includes(jobType.id)}
+                      onCheckedChange={(checked) => handleJobTypeToggle(jobType.id, checked as boolean)}
+                      data-testid={`checkbox-job-type-${jobType.id}`}
+                    />
+                    <div className="flex-1">
+                      <div className="font-medium text-gray-900">{jobType.label}</div>
+                      <div className="text-sm text-gray-600">{jobType.description}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <h4 className="font-medium text-gray-900 mb-4">Work Location Preferences</h4>
+              <div className="grid grid-cols-1 gap-3">
+                {[
+                  { id: "remote", label: "Remote Work", description: "Work from home or anywhere" },
+                  { id: "closetohome", label: "Close to Home", description: "Within 10 miles of your location" },
+                  { id: "anywhere", label: "Anywhere in Town", description: "Willing to commute within the city" },
+                  { id: "flexible", label: "Flexible Location", description: "Mix of locations or travel" }
+                ].map((location) => (
+                  <div key={location.id} className="flex items-start space-x-3 p-3 border rounded-lg">
+                    <Checkbox
+                      checked={preferredLocations.includes(location.id)}
+                      onCheckedChange={(checked) => handleLocationToggle(location.id, checked as boolean)}
+                      data-testid={`checkbox-location-${location.id}`}
+                    />
+                    <div className="flex-1">
+                      <div className="font-medium text-gray-900 flex items-center">
+                        <MapPin className="w-4 h-4 mr-2" />
+                        {location.label}
+                      </div>
+                      <div className="text-sm text-gray-600 ml-6">{location.description}</div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           </CardContent>

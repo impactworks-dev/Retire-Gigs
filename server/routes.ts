@@ -38,6 +38,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update user profile information
+  app.patch("/api/users/:userId", isAuthenticated, async (req: any, res) => {
+    try {
+      const { userId } = req.params;
+      const authenticatedUserId = req.user.claims.sub;
+      
+      // Users can only update their own profile
+      if (userId !== authenticatedUserId) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+
+      const updates = req.body;
+      const user = await storage.upsertUser({ id: userId, ...updates });
+      res.json(user);
+    } catch (error) {
+      res.status(400).json({ message: "Failed to update profile" });
+    }
+  });
+
   // Save questionnaire responses
   app.post("/api/questionnaire", async (req, res) => {
     try {
