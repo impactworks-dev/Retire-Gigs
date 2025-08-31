@@ -127,7 +127,7 @@ export default function NewsArticlePage() {
             {article.imageUrl && (
               <div className="px-6 mb-6">
                 <img 
-                  src={article.imageUrl} 
+                  src={`/@assets/generated_images/${article.imageUrl.split('/').pop()}`}
                   alt={article.title}
                   className="w-full h-64 object-cover rounded-lg"
                   data-testid="article-image"

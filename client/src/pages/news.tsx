@@ -160,6 +160,17 @@ export default function News() {
           ) : (
             filteredArticles.map((article) => (
               <Card key={article.id} className="hover:shadow-lg transition-shadow duration-200" data-testid={`article-card-${article.id}`}>
+                {/* Article Header Image */}
+                {article.imageUrl && (
+                  <div className="relative h-48 w-full overflow-hidden rounded-t-lg">
+                    <img 
+                      src={`/@assets/generated_images/${article.imageUrl.split('/').pop()}`}
+                      alt={article.title}
+                      className="w-full h-full object-cover"
+                      data-testid={`article-header-image-${article.id}`}
+                    />
+                  </div>
+                )}
                 <CardHeader className="pb-4">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
