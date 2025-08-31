@@ -10,11 +10,14 @@ import {
   type InsertJobOpportunity,
   type SavedJob,
   type InsertSavedJob,
+  type Resume,
+  type InsertResume,
   users,
   questionnaireResponses,
   userPreferences,
   jobOpportunities,
-  savedJobs
+  savedJobs,
+  resumes
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, sql } from "drizzle-orm";
@@ -45,6 +48,14 @@ export interface IStorage {
   unsaveJob(userId: string, jobId: string): Promise<void>;
   getUserSavedJobs(userId: string): Promise<Array<{ id: string; userId: string; jobId: string; savedAt: Date; job: JobOpportunity }>>;
   isJobSaved(userId: string, jobId: string): Promise<boolean>;
+  
+  // Resume operations
+  createResume(resume: InsertResume): Promise<Resume>;
+  getResume(id: string): Promise<Resume | undefined>;
+  getUserResumes(userId: string): Promise<Resume[]>;
+  updateResume(id: string, updates: Partial<InsertResume>): Promise<Resume>;
+  deleteResume(id: string): Promise<void>;
+  setDefaultResume(userId: string, resumeId: string): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
@@ -53,6 +64,7 @@ export class MemStorage implements IStorage {
   private userPreferences: Map<string, UserPreferences>;
   private jobOpportunities: Map<string, JobOpportunity>;
   private savedJobs: Map<string, SavedJob>;
+  private resumes: Map<string, Resume>;
 
   constructor() {
     this.users = new Map();
@@ -60,6 +72,7 @@ export class MemStorage implements IStorage {
     this.userPreferences = new Map();
     this.jobOpportunities = new Map();
     this.savedJobs = new Map();
+    this.resumes = new Map();
     
     // Initialize with some sample job opportunities
     this.initializeSampleJobs();
@@ -299,6 +312,71 @@ export class MemStorage implements IStorage {
     return Array.from(this.savedJobs.values())
       .some(savedJob => savedJob.userId === userId && savedJob.jobId === jobId);
   }
+
+  async createResume(insertResume: InsertResume): Promise<Resume> {
+    const id = randomUUID();
+    const resume: Resume = {
+      ...insertResume,
+      id,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      summary: insertResume.summary || null,
+      skills: insertResume.skills || null,
+      education: insertResume.education || null,
+      workExperience: insertResume.workExperience || null,
+      certifications: insertResume.certifications || null,
+      achievements: insertResume.achievements || null,
+      uploadedFileUrl: insertResume.uploadedFileUrl || null,
+      isDefault: insertResume.isDefault ?? false
+    };
+    this.resumes.set(id, resume);
+    return resume;
+  }
+
+  async getResume(id: string): Promise<Resume | undefined> {
+    return this.resumes.get(id);
+  }
+
+  async getUserResumes(userId: string): Promise<Resume[]> {
+    return Array.from(this.resumes.values())
+      .filter(resume => resume.userId === userId);
+  }
+
+  async updateResume(id: string, updates: Partial<InsertResume>): Promise<Resume> {
+    const existing = this.resumes.get(id);
+    if (!existing) {
+      throw new Error("Resume not found");
+    }
+    
+    const updated: Resume = {
+      ...existing,
+      ...updates,
+      updatedAt: new Date()
+    };
+    this.resumes.set(id, updated);
+    return updated;
+  }
+
+  async deleteResume(id: string): Promise<void> {
+    this.resumes.delete(id);
+  }
+
+  async setDefaultResume(userId: string, resumeId: string): Promise<void> {
+    // First, unset any existing default for this user
+    Array.from(this.resumes.entries()).forEach(([id, resume]) => {
+      if (resume.userId === userId && resume.isDefault) {
+        this.resumes.set(id, { ...resume, isDefault: false, updatedAt: new Date() });
+      }
+    });
+    
+    // Set the specified resume as default
+    const targetResume = this.resumes.get(resumeId);
+    if (targetResume && targetResume.userId === userId) {
+      this.resumes.set(resumeId, { ...targetResume, isDefault: true, updatedAt: new Date() });
+    } else {
+      throw new Error("Resume not found or access denied");
+    }
+  }
 }
 
 // Database-backed storage implementation
@@ -447,6 +525,63 @@ export class DatabaseStorage implements IStorage {
       .limit(1);
     
     return !!result;
+  }
+
+  async createResume(insertResume: InsertResume): Promise<Resume> {
+    const [resume] = await db
+      .insert(resumes)
+      .values(insertResume)
+      .returning();
+    return resume;
+  }
+
+  async getResume(id: string): Promise<Resume | undefined> {
+    const [resume] = await db.select().from(resumes).where(eq(resumes.id, id));
+    return resume || undefined;
+  }
+
+  async getUserResumes(userId: string): Promise<Resume[]> {
+    return await db
+      .select()
+      .from(resumes)
+      .where(eq(resumes.userId, userId));
+  }
+
+  async updateResume(id: string, updates: Partial<InsertResume>): Promise<Resume> {
+    const [updated] = await db
+      .update(resumes)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(resumes.id, id))
+      .returning();
+    
+    if (!updated) {
+      throw new Error("Resume not found");
+    }
+    
+    return updated;
+  }
+
+  async deleteResume(id: string): Promise<void> {
+    await db.delete(resumes).where(eq(resumes.id, id));
+  }
+
+  async setDefaultResume(userId: string, resumeId: string): Promise<void> {
+    // First, unset any existing default for this user
+    await db
+      .update(resumes)
+      .set({ isDefault: false, updatedAt: new Date() })
+      .where(and(eq(resumes.userId, userId), eq(resumes.isDefault, true)));
+    
+    // Set the specified resume as default
+    const [updated] = await db
+      .update(resumes)
+      .set({ isDefault: true, updatedAt: new Date() })
+      .where(and(eq(resumes.id, resumeId), eq(resumes.userId, userId)))
+      .returning();
+    
+    if (!updated) {
+      throw new Error("Resume not found or access denied");
+    }
   }
 }
 

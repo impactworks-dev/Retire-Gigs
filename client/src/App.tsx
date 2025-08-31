@@ -13,6 +13,7 @@ import RetakeAssessment from "@/pages/retake-assessment";
 import Dashboard from "@/pages/dashboard";
 import Profile from "@/pages/profile";
 import { SavedJobs } from "@/pages/saved-jobs";
+import ResumeBuilder from "@/pages/resume-builder";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -34,6 +35,7 @@ function Router() {
           <Route path="/dashboard" component={Dashboard} />
           <Route path="/profile" component={Profile} />
           <Route path="/saved-jobs" component={SavedJobs} />
+          <Route path="/resume-builder" component={ResumeBuilder} />
         </>
       )}
       <Route component={NotFound} />

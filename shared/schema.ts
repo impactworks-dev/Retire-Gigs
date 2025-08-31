@@ -70,11 +70,28 @@ export const savedJobs = pgTable("saved_jobs", {
   savedAt: timestamp("saved_at").defaultNow(),
 });
 
+export const resumes = pgTable("resumes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  title: text("title").notNull(),
+  summary: text("summary"),
+  skills: jsonb("skills"), // Array of skill strings
+  education: jsonb("education"), // Array of education objects
+  workExperience: jsonb("work_experience"), // Array of work experience objects
+  certifications: jsonb("certifications"), // Array of certification objects
+  achievements: jsonb("achievements"), // Array of achievement strings
+  uploadedFileUrl: text("uploaded_file_url"), // URL to uploaded resume file
+  isDefault: boolean("is_default").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many, one }) => ({
   questionnaireResponses: many(questionnaireResponses),
   userPreferences: one(userPreferences),
   savedJobs: many(savedJobs),
+  resumes: many(resumes),
 }));
 
 export const questionnaireResponsesRelations = relations(questionnaireResponses, ({ one }) => ({
@@ -106,6 +123,13 @@ export const savedJobsRelations = relations(savedJobs, ({ one }) => ({
   }),
 }));
 
+export const resumesRelations = relations(resumes, ({ one }) => ({
+  user: one(users, {
+    fields: [resumes.userId],
+    references: [users.id],
+  }),
+}));
+
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   createdAt: true,
@@ -131,6 +155,12 @@ export const insertSavedJobSchema = createInsertSchema(savedJobs).omit({
   savedAt: true,
 });
 
+export const insertResumeSchema = createInsertSchema(resumes).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type UpsertUser = typeof users.$inferInsert;
@@ -142,3 +172,5 @@ export type JobOpportunity = typeof jobOpportunities.$inferSelect;
 export type InsertJobOpportunity = z.infer<typeof insertJobOpportunitySchema>;
 export type SavedJob = typeof savedJobs.$inferSelect;
 export type InsertSavedJob = z.infer<typeof insertSavedJobSchema>;
+export type Resume = typeof resumes.$inferSelect;
+export type InsertResume = z.infer<typeof insertResumeSchema>;

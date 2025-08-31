@@ -5,8 +5,13 @@ import {
   insertUserSchema,
   insertQuestionnaireResponseSchema,
   insertUserPreferencesSchema,
-  insertJobOpportunitySchema
+  insertJobOpportunitySchema,
+  insertResumeSchema
 } from "@shared/schema";
+import {
+  ObjectStorageService,
+  ObjectNotFoundError,
+} from "./objectStorage";
 import cron from "node-cron";
 import nodemailer from "nodemailer";
 import { setupAuth, isAuthenticated } from "./replitAuth";
@@ -303,6 +308,200 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ message: "Failed to send notification" });
+    }
+  });
+
+  // Resume API routes
+  
+  // Get all resumes for authenticated user
+  app.get("/api/resumes", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const resumes = await storage.getUserResumes(userId);
+      res.json(resumes);
+    } catch (error) {
+      console.error("Error fetching resumes:", error);
+      res.status(500).json({ message: "Failed to fetch resumes" });
+    }
+  });
+
+  // Get specific resume by ID
+  app.get("/api/resumes/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { id } = req.params;
+      
+      const resume = await storage.getResume(id);
+      if (!resume) {
+        return res.status(404).json({ message: "Resume not found" });
+      }
+      
+      // Users can only access their own resumes
+      if (resume.userId !== userId) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      
+      res.json(resume);
+    } catch (error) {
+      console.error("Error fetching resume:", error);
+      res.status(500).json({ message: "Failed to fetch resume" });
+    }
+  });
+
+  // Create new resume
+  app.post("/api/resumes", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const resumeData = insertResumeSchema.parse({
+        ...req.body,
+        userId
+      });
+      
+      const resume = await storage.createResume(resumeData);
+      res.json(resume);
+    } catch (error) {
+      console.error("Error creating resume:", error);
+      res.status(400).json({ message: "Invalid resume data" });
+    }
+  });
+
+  // Update resume
+  app.patch("/api/resumes/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { id } = req.params;
+      
+      // Check if resume exists and belongs to user
+      const existingResume = await storage.getResume(id);
+      if (!existingResume) {
+        return res.status(404).json({ message: "Resume not found" });
+      }
+      
+      if (existingResume.userId !== userId) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      
+      const updates = req.body;
+      const updatedResume = await storage.updateResume(id, updates);
+      res.json(updatedResume);
+    } catch (error) {
+      console.error("Error updating resume:", error);
+      res.status(400).json({ message: "Failed to update resume" });
+    }
+  });
+
+  // Delete resume
+  app.delete("/api/resumes/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { id } = req.params;
+      
+      // Check if resume exists and belongs to user
+      const existingResume = await storage.getResume(id);
+      if (!existingResume) {
+        return res.status(404).json({ message: "Resume not found" });
+      }
+      
+      if (existingResume.userId !== userId) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      
+      await storage.deleteResume(id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting resume:", error);
+      res.status(500).json({ message: "Failed to delete resume" });
+    }
+  });
+
+  // Set default resume
+  app.put("/api/resumes/:id/default", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { id } = req.params;
+      
+      await storage.setDefaultResume(userId, id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error setting default resume:", error);
+      res.status(400).json({ message: error.message || "Failed to set default resume" });
+    }
+  });
+
+  // Resume file upload endpoint
+  app.post("/api/resumes/upload", isAuthenticated, async (req, res) => {
+    const objectStorageService = new ObjectStorageService();
+    const uploadURL = await objectStorageService.getObjectEntityUploadURL();
+    res.json({ uploadURL });
+  });
+
+  // Resume file access endpoint
+  app.get("/objects/:objectPath(*)", isAuthenticated, async (req, res) => {
+    const userId = req.user?.claims?.sub;
+    const objectStorageService = new ObjectStorageService();
+    try {
+      const objectFile = await objectStorageService.getObjectEntityFile(
+        req.path,
+      );
+      const canAccess = await objectStorageService.canAccessObjectEntity({
+        objectFile,
+        userId: userId,
+        requestedPermission: "read" as any,
+      });
+      if (!canAccess) {
+        return res.sendStatus(401);
+      }
+      objectStorageService.downloadObject(objectFile, res);
+    } catch (error) {
+      console.error("Error checking object access:", error);
+      if (error instanceof ObjectNotFoundError) {
+        return res.sendStatus(404);
+      }
+      return res.sendStatus(500);
+    }
+  });
+
+  // Update resume with uploaded file URL
+  app.put("/api/resumes/:id/upload", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { id } = req.params;
+      
+      if (!req.body.uploadedFileUrl) {
+        return res.status(400).json({ error: "uploadedFileUrl is required" });
+      }
+
+      // Check if resume exists and belongs to user
+      const existingResume = await storage.getResume(id);
+      if (!existingResume) {
+        return res.status(404).json({ message: "Resume not found" });
+      }
+      
+      if (existingResume.userId !== userId) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+
+      const objectStorageService = new ObjectStorageService();
+      const objectPath = await objectStorageService.trySetObjectEntityAclPolicy(
+        req.body.uploadedFileUrl,
+        {
+          owner: userId,
+          visibility: "private",
+        },
+      );
+
+      // Update the resume with the file URL
+      const updatedResume = await storage.updateResume(id, {
+        uploadedFileUrl: objectPath
+      });
+
+      res.status(200).json({
+        objectPath: objectPath,
+        resume: updatedResume
+      });
+    } catch (error) {
+      console.error("Error updating resume with uploaded file:", error);
+      res.status(500).json({ error: "Internal server error" });
     }
   });
 

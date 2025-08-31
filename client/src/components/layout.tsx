@@ -1,4 +1,4 @@
-import { Menu, Briefcase, User, LogOut, Bookmark } from "lucide-react";
+import { Menu, Briefcase, User, LogOut, Bookmark, FileText } from "lucide-react";
 import { Link } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -52,6 +52,12 @@ export function Layout({ children }: LayoutProps) {
                     <Link href="/saved-jobs">
                       <Bookmark className="w-4 h-4 mr-2" />
                       Saved Jobs
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/resume-builder">
+                      <FileText className="w-4 h-4 mr-2" />
+                      Resume Builder
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
