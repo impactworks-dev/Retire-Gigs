@@ -17,6 +17,7 @@ import nodemailer from "nodemailer";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { geocodeAddress } from "./geocoding";
 import { ResumeParserService } from "./resumeParser";
+import { jobMatchingService } from "./jobMatchingService";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
@@ -558,14 +559,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Manual trigger for job notifications (for testing)
+  app.post("/api/send-job-notifications", isAuthenticated, async (req: any, res) => {
+    try {
+      await jobMatchingService.processAllUserNotifications();
+      res.json({ success: true, message: "Job notifications processed" });
+    } catch (error) {
+      console.error("Error processing job notifications:", error);
+      res.status(500).json({ message: "Failed to process job notifications" });
+    }
+  });
+
+  // Test endpoint for job notifications (no auth required for testing)
+  app.post("/api/test-notifications", async (req, res) => {
+    try {
+      await jobMatchingService.processAllUserNotifications();
+      res.json({ success: true, message: "Test job notifications processed" });
+    } catch (error) {
+      console.error("Error processing test job notifications:", error);
+      res.status(500).json({ message: "Failed to process test job notifications" });
+    }
+  });
+
+  // Get personalized job matches for authenticated user
+  app.get("/api/jobs/personalized", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const matchingJobs = await jobMatchingService.findMatchingJobsForUser(userId);
+      res.json(matchingJobs);
+    } catch (error) {
+      console.error("Error getting personalized jobs:", error);
+      res.status(500).json({ message: "Failed to get personalized jobs" });
+    }
+  });
+
   // Setup scheduled job notifications (runs daily at 9 AM)
   cron.schedule("0 9 * * *", async () => {
     console.log("Running scheduled job notifications...");
-    // In a real implementation, this would:
-    // 1. Get all users with notifications enabled
-    // 2. Check their schedule preferences
-    // 3. Send appropriate job notifications
-    // 4. Track last notification times
+    await jobMatchingService.processAllUserNotifications();
   });
 
   const httpServer = createServer(app);

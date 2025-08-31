@@ -38,5 +38,51 @@ task = "shell.exec"
 args = "npm run dev"
 waitForPort = 5000
 
+[[workflows.workflow]]
+name = "Job Search & Notify"
+author = 39403415
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "echo \"Starting job search and notification process...\""
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = 'curl -X POST http://localhost:5000/api/send-job-notifications \'
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = '  -H "Content-Type: application/json" \'
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "  -H \"Authorization: Bearer YOUR_AUTH_TOKEN\""
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "echo \"Job notification process completed!\""
+
+[[workflows.workflow]]
+name = "Job Search & Notify"
+author = 39403415
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "echo \"Starting job search and notification process...\""
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = 'curl -X POST http://localhost:5000/api/test-notifications \'
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "  -H \"Content-Type: application/json\""
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "echo \"Job notification process completed!\""
+
 [agent]
 integrations = ["javascript_database==1.0.0", "javascript_object_storage==1.0.0", "javascript_log_in_with_replit==1.0.0"]

@@ -1,5 +1,5 @@
-import { 
-  type User, 
+import {
+  type User,
   type InsertUser,
   type UpsertUser,
   type QuestionnaireResponse,
@@ -26,29 +26,30 @@ import { randomUUID } from "crypto";
 export interface IStorage {
   // User operations
   createUser(user: InsertUser): Promise<User>;
-  getUser(id: string): Promise<User | undefined>;
+  getUser(userId: string): Promise<User | undefined>;
+  getAllUsers(): Promise<User[]>;
   upsertUser(user: UpsertUser): Promise<User>;
-  
+
   // Questionnaire operations
   saveQuestionnaireResponse(response: InsertQuestionnaireResponse): Promise<QuestionnaireResponse>;
   getQuestionnaireResponse(userId: string): Promise<QuestionnaireResponse | undefined>;
-  
+
   // User preferences operations
   saveUserPreferences(preferences: InsertUserPreferences): Promise<UserPreferences>;
   getUserPreferences(userId: string): Promise<UserPreferences | undefined>;
   updateUserPreferences(userId: string, preferences: Partial<InsertUserPreferences>): Promise<UserPreferences>;
-  
+
   // Job opportunities operations
   getJobOpportunities(): Promise<JobOpportunity[]>;
   getMatchingJobs(userId: string): Promise<JobOpportunity[]>;
   createJobOpportunity(job: InsertJobOpportunity): Promise<JobOpportunity>;
-  
+
   // Saved jobs operations
   saveJob(userId: string, jobId: string): Promise<SavedJob>;
   unsaveJob(userId: string, jobId: string): Promise<void>;
   getUserSavedJobs(userId: string): Promise<Array<{ id: string; userId: string; jobId: string; savedAt: Date; job: JobOpportunity }>>;
   isJobSaved(userId: string, jobId: string): Promise<boolean>;
-  
+
   // Resume operations
   createResume(resume: InsertResume): Promise<Resume>;
   getResume(id: string): Promise<Resume | undefined>;
@@ -73,7 +74,7 @@ export class MemStorage implements IStorage {
     this.jobOpportunities = new Map();
     this.savedJobs = new Map();
     this.resumes = new Map();
-    
+
     // Initialize with some sample job opportunities
     this.initializeSampleJobs();
   }
@@ -164,8 +165,12 @@ export class MemStorage implements IStorage {
     return user;
   }
 
-  async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
+  async getUser(userId: string): Promise<User | undefined> {
+    return this.users.get(userId);
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    return Array.from(this.users.values());
   }
 
   async upsertUser(userData: UpsertUser): Promise<User> {
@@ -233,7 +238,7 @@ export class MemStorage implements IStorage {
     if (!existing) {
       throw new Error("User preferences not found");
     }
-    
+
     const updated: UserPreferences = {
       ...existing,
       ...preferences,
@@ -291,7 +296,7 @@ export class MemStorage implements IStorage {
   async getUserSavedJobs(userId: string): Promise<Array<{ id: string; userId: string; jobId: string; savedAt: Date; job: JobOpportunity }>> {
     const userSavedJobs = Array.from(this.savedJobs.values())
       .filter(savedJob => savedJob.userId === userId);
-    
+
     const result: Array<{ id: string; userId: string; jobId: string; savedAt: Date; job: JobOpportunity }> = [];
     for (const savedJob of userSavedJobs) {
       const job = this.jobOpportunities.get(savedJob.jobId);
@@ -347,7 +352,7 @@ export class MemStorage implements IStorage {
     if (!existing) {
       throw new Error("Resume not found");
     }
-    
+
     const updated: Resume = {
       ...existing,
       ...updates,
@@ -368,7 +373,7 @@ export class MemStorage implements IStorage {
         this.resumes.set(id, { ...resume, isDefault: false, updatedAt: new Date() });
       }
     });
-    
+
     // Set the specified resume as default
     const targetResume = this.resumes.get(resumeId);
     if (targetResume && targetResume.userId === userId) {
@@ -389,9 +394,13 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
-  async getUser(id: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.id, id));
+  async getUser(userId: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, userId));
     return user || undefined;
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    return await db.select().from(users);
   }
 
   async upsertUser(userData: UpsertUser): Promise<User> {
@@ -447,11 +456,11 @@ export class DatabaseStorage implements IStorage {
       .set({ ...preferences, updatedAt: new Date() })
       .where(eq(userPreferences.userId, userId))
       .returning();
-    
+
     if (!updated) {
       throw new Error("User preferences not found");
     }
-    
+
     return updated;
   }
 
@@ -482,7 +491,7 @@ export class DatabaseStorage implements IStorage {
       .values({ userId, jobId })
       .onConflictDoNothing()
       .returning();
-    
+
     // If no savedJob was returned due to conflict, fetch the existing one
     if (!savedJob) {
       const [existing] = await db
@@ -491,7 +500,7 @@ export class DatabaseStorage implements IStorage {
         .where(and(eq(savedJobs.userId, userId), eq(savedJobs.jobId, jobId)));
       return existing;
     }
-    
+
     return savedJob;
   }
 
@@ -507,7 +516,7 @@ export class DatabaseStorage implements IStorage {
       .from(savedJobs)
       .innerJoin(jobOpportunities, eq(savedJobs.jobId, jobOpportunities.id))
       .where(and(eq(savedJobs.userId, userId), eq(jobOpportunities.isActive, true)));
-    
+
     return results.map(result => ({
       id: result.saved_jobs.id,
       userId: result.saved_jobs.userId,
@@ -523,7 +532,7 @@ export class DatabaseStorage implements IStorage {
       .from(savedJobs)
       .where(and(eq(savedJobs.userId, userId), eq(savedJobs.jobId, jobId)))
       .limit(1);
-    
+
     return !!result;
   }
 
@@ -553,11 +562,11 @@ export class DatabaseStorage implements IStorage {
       .set({ ...updates, updatedAt: new Date() })
       .where(eq(resumes.id, id))
       .returning();
-    
+
     if (!updated) {
       throw new Error("Resume not found");
     }
-    
+
     return updated;
   }
 
@@ -571,14 +580,14 @@ export class DatabaseStorage implements IStorage {
       .update(resumes)
       .set({ isDefault: false, updatedAt: new Date() })
       .where(and(eq(resumes.userId, userId), eq(resumes.isDefault, true)));
-    
+
     // Set the specified resume as default
     const [updated] = await db
       .update(resumes)
       .set({ isDefault: true, updatedAt: new Date() })
       .where(and(eq(resumes.id, resumeId), eq(resumes.userId, userId)))
       .returning();
-    
+
     if (!updated) {
       throw new Error("Resume not found or access denied");
     }
