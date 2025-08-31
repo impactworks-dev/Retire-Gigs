@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -14,7 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { ObjectUploader } from "@/components/ObjectUploader";
-import { Plus, Trash2, Upload, FileText, Download, Star, Edit3 } from "lucide-react";
+import { Plus, Trash2, Upload, FileText, Download, Star, Edit3, ArrowLeft, Home } from "lucide-react";
 import type { Resume } from "@shared/schema";
 import type { UploadResult } from "@uppy/core";
 
@@ -315,7 +316,24 @@ export default function ResumeBuilder() {
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl">
+      {/* Header with navigation */}
       <div className="mb-8">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-4">
+            <Link href="/dashboard">
+              <Button variant="outline" size="sm" className="flex items-center gap-2" data-testid="button-back-dashboard">
+                <ArrowLeft className="w-4 h-4" />
+                Back to Dashboard
+              </Button>
+            </Link>
+            <Link href="/">
+              <Button variant="ghost" size="sm" className="flex items-center gap-2" data-testid="button-home">
+                <Home className="w-4 h-4" />
+                Home
+              </Button>
+            </Link>
+          </div>
+        </div>
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Resume Builder</h1>
         <p className="text-gray-600">Create professional resumes tailored for retirement jobs</p>
       </div>
