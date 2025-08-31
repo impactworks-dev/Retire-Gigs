@@ -1,6 +1,7 @@
 import { Resend } from 'resend';
 import type { User, UserPreferences, QuestionnaireResponse, JobOpportunity } from "@shared/schema";
 import { storage } from "./storage";
+import { smsService } from './smsService';
 
 // Configure Resend (lazy initialization)
 let resend: Resend | null = null;
@@ -147,15 +148,36 @@ export class JobMatchingService {
     }
   }
 
-  // Placeholder for sending SMS notifications
+  // Send SMS notifications
   async sendJobNotificationSms(user: User, jobs: JobOpportunity[]): Promise<boolean> {
-    if (jobs.length === 0) {
+    if (jobs.length === 0 || !user.phoneNumber) {
       return false;
     }
-    // TODO: Implement SMS notification logic using a service like Twilio or Resend's SMS API
-    // Note: Phone number field would need to be added to user schema first
-    console.warn(`SMS notification not implemented for user ${user.id}`);
-    return false;
+
+    if (!smsService.isConfigured()) {
+      console.log('SMS service not configured - skipping SMS notification');
+      return false;
+    }
+
+    try {
+      // Send SMS for the first job (primary match)
+      const primaryJob = jobs[0];
+      const success = await smsService.sendJobNotificationSms(
+        user.phoneNumber,
+        primaryJob.title,
+        primaryJob.company,
+        jobs.length
+      );
+
+      if (success) {
+        console.log(`SMS notification sent to ${user.phoneNumber} for ${jobs.length} jobs`);
+      }
+
+      return success;
+    } catch (error) {
+      console.error("Error sending SMS notification:", error);
+      return false;
+    }
   }
 
   private generateEmailContent(user: User, jobs: JobOpportunity[]): string {
@@ -241,12 +263,23 @@ export class JobMatchingService {
             );
 
             if (notifiableJobs.length > 0) {
-              const emailSent = await this.sendJobNotificationEmail(user, notifiableJobs);
-              // TODO: Add logic to send SMS notifications if enabled and email fails or is not preferred
-              // const smsSent = await this.sendJobNotificationSms(user, notifiableJobs);
+              // Send email notifications if enabled (default behavior)
+              let emailSent = false;
+              if (preferences?.notificationsEnabled !== false) {
+                emailSent = await this.sendJobNotificationEmail(user, notifiableJobs);
+              }
 
-              if (emailSent) {
-                console.log(`Notification sent to ${user.email}: ${notifiableJobs.length} jobs`);
+              // Send SMS notifications if enabled
+              let smsSent = false;
+              if (preferences?.smsNotificationsEnabled && user.phoneNumber) {
+                smsSent = await this.sendJobNotificationSms(user, notifiableJobs);
+              }
+
+              if (emailSent || smsSent) {
+                const methods = [];
+                if (emailSent) methods.push('email');
+                if (smsSent) methods.push('SMS');
+                console.log(`Notification sent via ${methods.join(' and ')} to user ${user.id}: ${notifiableJobs.length} jobs`);
               }
             }
           }

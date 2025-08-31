@@ -42,6 +42,12 @@ export default function Notifications() {
     enabled: !!authUser?.id,
   });
 
+  // Fetch user data for phone number
+  const { data: userData } = useQuery<{ phoneNumber?: string }>({
+    queryKey: ["/api/users", authUser?.id],
+    enabled: !!authUser?.id,
+  });
+
   // Update preferences mutation
   const updatePreferencesMutation = useMutation({
     mutationFn: async (updates: Partial<UserPreferences>) => {
@@ -64,6 +70,29 @@ export default function Notifications() {
       toast({
         title: "Error",
         description: "Failed to update notification preferences.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Update user profile mutation for phone number
+  const updateUserMutation = useMutation({
+    mutationFn: async (updates: { phoneNumber?: string }) => {
+      const response = await fetch(`/api/users/${authUser?.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      });
+      if (!response.ok) throw new Error("Failed to update user profile");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users", authUser?.id] });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to update phone number.",
         variant: "destructive",
       });
     },
@@ -94,14 +123,20 @@ export default function Notifications() {
     },
   });
 
-  // Load preferences when data is available
+  // Load preferences and user data when available
   useEffect(() => {
     if (preferences) {
       setEmailEnabled(preferences.notificationsEnabled || true);
+      setSmsEnabled(preferences.smsNotificationsEnabled || false);
       setFrequency((preferences.schedulePreference as NotificationFrequency) || 'daily');
-      // SMS and phone number would be additional fields in preferences
     }
   }, [preferences]);
+
+  useEffect(() => {
+    if (userData?.phoneNumber) {
+      setPhoneNumber(userData.phoneNumber);
+    }
+  }, [userData]);
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -114,12 +149,20 @@ export default function Notifications() {
     }
   }, [isAuthenticated, authLoading, toast]);
 
-  const handleSaveSettings = () => {
+  const handleSaveSettings = async () => {
+    // Update preferences
     updatePreferencesMutation.mutate({
       notificationsEnabled: emailEnabled,
+      smsNotificationsEnabled: smsEnabled,
       schedulePreference: frequency,
-      // Add SMS preferences when backend supports it
     });
+
+    // Update phone number if it has changed
+    if (phoneNumber !== (userData?.phoneNumber || "")) {
+      updateUserMutation.mutate({
+        phoneNumber: phoneNumber.trim() || undefined,
+      });
+    }
   };
 
   if (authLoading || isLoading) {
@@ -202,13 +245,12 @@ export default function Notifications() {
               </CardContent>
             </Card>
 
-            {/* SMS Notifications (Future Feature) */}
-            <Card className="opacity-60">
+            {/* SMS Notifications */}
+            <Card>
               <CardHeader>
                 <CardTitle className="flex items-center">
                   <Smartphone className="w-5 h-5 mr-2" />
                   SMS Notifications
-                  <Badge variant="secondary" className="ml-2">Coming Soon</Badge>
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -220,7 +262,7 @@ export default function Notifications() {
                   <Switch
                     checked={smsEnabled}
                     onCheckedChange={setSmsEnabled}
-                    disabled
+                    data-testid="switch-sms-notifications"
                   />
                 </div>
 
@@ -233,8 +275,8 @@ export default function Notifications() {
                     value={phoneNumber}
                     onChange={(e) => setPhoneNumber(e.target.value)}
                     placeholder="+1 (555) 123-4567"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50"
-                    disabled
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                    data-testid="input-phone-number"
                   />
                 </div>
               </CardContent>
@@ -285,10 +327,10 @@ export default function Notifications() {
               <Button
                 onClick={handleSaveSettings}
                 size="lg"
-                disabled={updatePreferencesMutation.isPending}
+                disabled={updatePreferencesMutation.isPending || updateUserMutation.isPending}
                 data-testid="button-save-settings"
               >
-                {updatePreferencesMutation.isPending ? "Saving..." : "Save Settings"}
+                {(updatePreferencesMutation.isPending || updateUserMutation.isPending) ? "Saving..." : "Save Settings"}
               </Button>
             </div>
           </div>
@@ -309,6 +351,12 @@ export default function Notifications() {
                   <span className="text-sm text-gray-600">Email Alerts</span>
                   <Badge variant={emailEnabled ? "default" : "secondary"}>
                     {emailEnabled ? "Enabled" : "Disabled"}
+                  </Badge>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600">SMS Alerts</span>
+                  <Badge variant={smsEnabled ? "default" : "secondary"}>
+                    {smsEnabled ? "Enabled" : "Disabled"}
                   </Badge>
                 </div>
                 <div className="flex items-center justify-between">

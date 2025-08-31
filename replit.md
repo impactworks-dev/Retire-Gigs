@@ -59,12 +59,20 @@ Preferred communication style: Simple, everyday language.
 - **Replit Integration**: Development environment integration and error handling
 
 ### Potential Future Integrations
-- **Email Service**: For job notifications and communication
-- **SMS Service**: For mobile notifications
 - **Job Board APIs**: For external job opportunity sourcing
 - **Analytics**: For user behavior tracking and platform optimization
 
 ## Recent Changes
+
+### SMS Notifications Implementation (August 31, 2025)
+- Implemented complete SMS notification system using Resend API
+- Added phone number field to user database schema with proper database migration
+- Created SMS service layer with message templating for job alerts
+- Enhanced user preferences to include SMS notification settings
+- Updated job notification service to send both email and SMS notifications
+- Enabled SMS notification controls in frontend with real-time status updates
+- Added phone number management in user profile settings
+- Integrated SMS functionality into existing notification workflow
 
 ### Progressive Web App Implementation (August 31, 2025)
 - Implemented full PWA functionality with installable mobile app capabilities

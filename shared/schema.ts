@@ -26,6 +26,7 @@ export const users = pgTable("users", {
   zipCode: text("zip_code"),
   latitude: text("latitude"), // GPS coordinates
   longitude: text("longitude"), // GPS coordinates
+  phoneNumber: varchar("phone_number"), // Phone number for SMS notifications
   profileImageUrl: varchar("profile_image_url"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -42,6 +43,7 @@ export const userPreferences = pgTable("user_preferences", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").references(() => users.id).notNull(),
   notificationsEnabled: boolean("notifications_enabled").default(true),
+  smsNotificationsEnabled: boolean("sms_notifications_enabled").default(false),
   schedulePreference: text("schedule_preference").default("weekly"), // daily, weekly, biweekly
   preferredJobTypes: jsonb("preferred_job_types"), // Array of job types: "outdoorwork", "deskwork", etc.
   preferredLocations: jsonb("preferred_locations"), // Array of location preferences: "remote", "closetohome", etc.
