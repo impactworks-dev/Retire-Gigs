@@ -169,7 +169,7 @@ export default function ResumeBuilder() {
       console.log("Getting upload parameters...");
       const response = await apiRequest("POST", "/api/resumes/upload");
       const data = await response.json();
-      console.log("Upload response:", response);
+      console.log("Upload response:", data);
       return {
         method: "PUT" as const,
         url: data.uploadURL,
