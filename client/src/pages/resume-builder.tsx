@@ -74,10 +74,8 @@ export default function ResumeBuilder() {
   // Create resume mutation
   const createResumeMutation = useMutation({
     mutationFn: async (data: ResumeFormData) => {
-      return apiRequest("/api/resumes", {
-        method: "POST",
-        body: JSON.stringify(data)
-      });
+      const res = await apiRequest("POST", "/api/resumes", data);
+      return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/resumes"] });
@@ -100,10 +98,8 @@ export default function ResumeBuilder() {
   // Update resume mutation
   const updateResumeMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: Partial<ResumeFormData> }) => {
-      return apiRequest(`/api/resumes/${id}`, {
-        method: "PATCH",
-        body: JSON.stringify(data)
-      });
+      const res = await apiRequest("PATCH", `/api/resumes/${id}`, data);
+      return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/resumes"] });
@@ -127,9 +123,8 @@ export default function ResumeBuilder() {
   // Delete resume mutation
   const deleteResumeMutation = useMutation({
     mutationFn: async (id: string) => {
-      return apiRequest(`/api/resumes/${id}`, {
-        method: "DELETE"
-      });
+      const res = await apiRequest("DELETE", `/api/resumes/${id}`);
+      return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/resumes"] });
@@ -150,9 +145,8 @@ export default function ResumeBuilder() {
   // Set default resume mutation
   const setDefaultMutation = useMutation({
     mutationFn: async (id: string) => {
-      return apiRequest(`/api/resumes/${id}/default`, {
-        method: "PUT"
-      });
+      const res = await apiRequest("PUT", `/api/resumes/${id}/default`);
+      return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/resumes"] });
@@ -171,36 +165,46 @@ export default function ResumeBuilder() {
   });
 
   const handleGetUploadParameters = async () => {
-    const response = await apiRequest("/api/resumes/upload", {
-      method: "POST"
-    });
-    return {
-      method: "PUT" as const,
-      url: response.uploadURL,
-    };
+    try {
+      console.log("Getting upload parameters...");
+      const response = await apiRequest("POST", "/api/resumes/upload");
+      const data = await response.json();
+      console.log("Upload response:", response);
+      return {
+        method: "PUT" as const,
+        url: data.uploadURL,
+      };
+    } catch (error) {
+      console.error("Error getting upload parameters:", error);
+      toast({
+        title: "Upload Error",
+        description: "Failed to get upload URL. Please try again.",
+        variant: "destructive",
+      });
+      throw error;
+    }
   };
 
   const handleUploadComplete = async (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
+    console.log("Upload complete result:", result);
     if (result.successful && result.successful.length > 0) {
       const uploadedFile = result.successful[0];
       const uploadURL = uploadedFile.uploadURL;
       
       // Create a new resume with the uploaded file
       try {
-        const newResume = await apiRequest("/api/resumes", {
-          method: "POST",
-          body: JSON.stringify({
-            title: `Uploaded Resume - ${new Date().toLocaleDateString()}`,
-            uploadedFileUrl: uploadURL
-          })
+        console.log("Creating resume with upload URL:", uploadURL);
+        const res = await apiRequest("POST", "/api/resumes", {
+          title: `Uploaded Resume - ${new Date().toLocaleDateString()}`,
+          uploadedFileUrl: uploadURL
         });
+        const newResume = await res.json();
+
+        console.log("Created resume:", newResume);
 
         // Set ACL policy for the uploaded file
-        await apiRequest(`/api/resumes/${newResume.id}/upload`, {
-          method: "PUT",
-          body: JSON.stringify({
-            uploadedFileUrl: uploadURL
-          })
+        await apiRequest("PUT", `/api/resumes/${newResume.id}/upload`, {
+          uploadedFileUrl: uploadURL
         });
 
         queryClient.invalidateQueries({ queryKey: ["/api/resumes"] });
@@ -209,12 +213,20 @@ export default function ResumeBuilder() {
           description: "Resume uploaded successfully!",
         });
       } catch (error) {
+        console.error("Error processing uploaded resume:", error);
         toast({
           title: "Error",
           description: "Failed to process uploaded resume.",
           variant: "destructive",
         });
       }
+    } else {
+      console.error("Upload failed or no files uploaded:", result);
+      toast({
+        title: "Upload Failed",
+        description: "No files were uploaded successfully.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -231,11 +243,11 @@ export default function ResumeBuilder() {
     form.reset({
       title: resume.title,
       summary: resume.summary || "",
-      skills: (resume.skills as string[]) || [],
-      education: (resume.education as any[]) || [],
-      workExperience: (resume.workExperience as any[]) || [],
-      certifications: (resume.certifications as any[]) || [],
-      achievements: (resume.achievements as string[]) || []
+      skills: Array.isArray(resume.skills) ? resume.skills as string[] : [],
+      education: Array.isArray(resume.education) ? resume.education as any[] : [],
+      workExperience: Array.isArray(resume.workExperience) ? resume.workExperience as any[] : [],
+      certifications: Array.isArray(resume.certifications) ? resume.certifications as any[] : [],
+      achievements: Array.isArray(resume.achievements) ? resume.achievements as string[] : []
     });
     setActiveTab("builder");
   };
@@ -327,7 +339,7 @@ export default function ResumeBuilder() {
               </div>
             </div>
 
-            {resumes && resumes.length > 0 ? (
+            {resumes && Array.isArray(resumes) && resumes.length > 0 ? (
               <div className="grid gap-4">
                 {resumes.map((resume: Resume) => (
                   <Card key={resume.id} className="relative">
@@ -383,19 +395,19 @@ export default function ResumeBuilder() {
                         {resume.uploadedFileUrl && (
                           <Badge variant="outline">Uploaded File</Badge>
                         )}
-                        {resume.skills && (resume.skills as string[]).length > 0 && (
+                        {resume.skills && Array.isArray(resume.skills) && resume.skills.length > 0 && (
                           <Badge variant="outline">
-                            {(resume.skills as string[]).length} Skills
+                            {String(resume.skills.length)} Skills
                           </Badge>
                         )}
-                        {resume.workExperience && (resume.workExperience as any[]).length > 0 && (
+                        {resume.workExperience && Array.isArray(resume.workExperience) && resume.workExperience.length > 0 && (
                           <Badge variant="outline">
-                            {(resume.workExperience as any[]).length} Jobs
+                            {String(resume.workExperience.length)} Jobs
                           </Badge>
                         )}
-                        {resume.education && (resume.education as any[]).length > 0 && (
+                        {resume.education && Array.isArray(resume.education) && resume.education.length > 0 && (
                           <Badge variant="outline">
-                            {(resume.education as any[]).length} Education
+                            {String(resume.education.length)} Education
                           </Badge>
                         )}
                       </div>

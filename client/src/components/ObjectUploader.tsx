@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { ReactNode } from "react";
 import Uppy from "@uppy/core";
 import { DashboardModal } from "@uppy/react";
@@ -6,6 +6,7 @@ import { DashboardModal } from "@uppy/react";
 import AwsS3 from "@uppy/aws-s3";
 import type { UploadResult } from "@uppy/core";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 
 interface ObjectUploaderProps {
   maxNumberOfFiles?: number;
@@ -58,6 +59,7 @@ export function ObjectUploader({
   children,
 }: ObjectUploaderProps) {
   const [showModal, setShowModal] = useState(false);
+  const { toast } = useToast();
   const [uppy] = useState(() =>
     new Uppy({
       restrictions: {
@@ -72,9 +74,24 @@ export function ObjectUploader({
         getUploadParameters: onGetUploadParameters,
       })
       .on("complete", (result) => {
+        setShowModal(false);
         onComplete?.(result);
       })
+      .on("error", (error) => {
+        console.error("Upload error:", error);
+        toast({
+          title: "Upload Error",
+          description: "Failed to upload file. Please try again.",
+          variant: "destructive",
+        });
+      })
   );
+
+  useEffect(() => {
+    return () => {
+      uppy.destroy();
+    };
+  }, [uppy]);
 
   return (
     <div>
