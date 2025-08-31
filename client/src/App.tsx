@@ -11,6 +11,7 @@ import Questionnaire from "@/pages/questionnaire";
 import RetakeAssessment from "@/pages/retake-assessment";
 import Dashboard from "@/pages/dashboard";
 import Profile from "@/pages/profile";
+import { SavedJobs } from "@/pages/saved-jobs";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -31,6 +32,7 @@ function Router() {
           <Route path="/retake-assessment" component={RetakeAssessment} />
           <Route path="/dashboard" component={Dashboard} />
           <Route path="/profile" component={Profile} />
+          <Route path="/saved-jobs" component={SavedJobs} />
         </>
       )}
       <Route component={NotFound} />

@@ -222,6 +222,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Saved jobs routes
+  app.post("/api/saved-jobs", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { jobId } = req.body;
+      
+      if (!jobId) {
+        return res.status(400).json({ message: "Job ID is required" });
+      }
+      
+      const savedJob = await storage.saveJob(userId, jobId);
+      res.json(savedJob);
+    } catch (error) {
+      console.error("Error saving job:", error);
+      res.status(500).json({ message: "Failed to save job" });
+    }
+  });
+
+  app.delete("/api/saved-jobs/:jobId", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { jobId } = req.params;
+      
+      await storage.unsaveJob(userId, jobId);
+      res.json({ message: "Job unsaved successfully" });
+    } catch (error) {
+      console.error("Error unsaving job:", error);
+      res.status(500).json({ message: "Failed to unsave job" });
+    }
+  });
+
+  app.get("/api/saved-jobs", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const savedJobs = await storage.getUserSavedJobs(userId);
+      res.json(savedJobs);
+    } catch (error) {
+      console.error("Error fetching saved jobs:", error);
+      res.status(500).json({ message: "Failed to fetch saved jobs" });
+    }
+  });
+
+  app.get("/api/saved-jobs/check/:jobId", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { jobId } = req.params;
+      
+      const isSaved = await storage.isJobSaved(userId, jobId);
+      res.json({ isSaved });
+    } catch (error) {
+      console.error("Error checking if job is saved:", error);
+      res.status(500).json({ message: "Failed to check saved status" });
+    }
+  });
+
   // Email notification endpoint
   app.post("/api/send-notification", async (req, res) => {
     try {

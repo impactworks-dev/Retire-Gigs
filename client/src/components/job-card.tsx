@@ -1,5 +1,10 @@
-import { Clock, MapPin } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Clock, MapPin, Bookmark, BookmarkCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/hooks/useAuth";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import type { JobOpportunity } from "@shared/schema";
 
 interface JobCardProps {
@@ -8,6 +13,79 @@ interface JobCardProps {
 }
 
 export function JobCard({ job, onViewDetails }: JobCardProps) {
+  const { user, isAuthenticated } = useAuth();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  // Check if job is saved
+  const { data: isSaved = false } = useQuery({
+    queryKey: ["/api/saved-jobs/check", job.id],
+    enabled: !!isAuthenticated && !!user?.id,
+  });
+
+  // Save job mutation
+  const saveJobMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/saved-jobs", { jobId: job.id });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/saved-jobs/check", job.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/saved-jobs"] });
+      toast({
+        title: "Job saved!",
+        description: "You can find this job in your saved jobs list.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Failed to save job",
+        description: "Please try again later.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Unsave job mutation
+  const unsaveJobMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("DELETE", `/api/saved-jobs/${job.id}`, {});
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/saved-jobs/check", job.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/saved-jobs"] });
+      toast({
+        title: "Job removed",
+        description: "Job removed from your saved list.",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Failed to remove job",
+        description: "Please try again later.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleSaveToggle = () => {
+    if (!isAuthenticated) {
+      toast({
+        title: "Please log in",
+        description: "You need to be logged in to save jobs.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (isSaved) {
+      unsaveJobMutation.mutate();
+    } else {
+      saveJobMutation.mutate();
+    }
+  };
+
   const getMatchScoreColor = (score: string) => {
     switch (score) {
       case "great":
@@ -86,13 +164,31 @@ export function JobCard({ job, onViewDetails }: JobCardProps) {
           <Clock className="w-4 h-4 mr-1" />
           <span data-testid={`text-time-ago-${job.id}`}>{job.timeAgo}</span>
         </div>
-        <Button 
-          onClick={() => onViewDetails(job.id)}
-          className="bg-primary hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-lg transition-colors duration-200"
-          data-testid={`button-view-details-${job.id}`}
-        >
-          View Details
-        </Button>
+        <div className="flex items-center gap-2">
+          {isAuthenticated && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSaveToggle}
+              disabled={saveJobMutation.isPending || unsaveJobMutation.isPending}
+              className={`${isSaved ? 'text-blue-600 border-blue-600' : 'text-gray-600'} hover:bg-blue-50`}
+              data-testid={`button-save-job-${job.id}`}
+            >
+              {isSaved ? (
+                <BookmarkCheck className="w-4 h-4" />
+              ) : (
+                <Bookmark className="w-4 h-4" />
+              )}
+            </Button>
+          )}
+          <Button 
+            onClick={() => onViewDetails(job.id)}
+            className="bg-primary hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-lg transition-colors duration-200"
+            data-testid={`button-view-details-${job.id}`}
+          >
+            View Details
+          </Button>
+        </div>
       </div>
 
       <div className="mt-4 flex items-center flex-wrap gap-2">

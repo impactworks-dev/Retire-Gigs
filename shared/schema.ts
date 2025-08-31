@@ -63,10 +63,18 @@ export const jobOpportunities = pgTable("job_opportunities", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const savedJobs = pgTable("saved_jobs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  jobId: varchar("job_id").references(() => jobOpportunities.id).notNull(),
+  savedAt: timestamp("saved_at").defaultNow(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many, one }) => ({
   questionnaireResponses: many(questionnaireResponses),
   userPreferences: one(userPreferences),
+  savedJobs: many(savedJobs),
 }));
 
 export const questionnaireResponsesRelations = relations(questionnaireResponses, ({ one }) => ({
@@ -80,6 +88,21 @@ export const userPreferencesRelations = relations(userPreferences, ({ one }) => 
   user: one(users, {
     fields: [userPreferences.userId],
     references: [users.id],
+  }),
+}));
+
+export const jobOpportunitiesRelations = relations(jobOpportunities, ({ many }) => ({
+  savedByUsers: many(savedJobs),
+}));
+
+export const savedJobsRelations = relations(savedJobs, ({ one }) => ({
+  user: one(users, {
+    fields: [savedJobs.userId],
+    references: [users.id],
+  }),
+  job: one(jobOpportunities, {
+    fields: [savedJobs.jobId],
+    references: [jobOpportunities.id],
   }),
 }));
 
@@ -103,6 +126,11 @@ export const insertJobOpportunitySchema = createInsertSchema(jobOpportunities).o
   createdAt: true,
 });
 
+export const insertSavedJobSchema = createInsertSchema(savedJobs).omit({
+  id: true,
+  savedAt: true,
+});
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type UpsertUser = typeof users.$inferInsert;
@@ -112,3 +140,5 @@ export type UserPreferences = typeof userPreferences.$inferSelect;
 export type InsertUserPreferences = z.infer<typeof insertUserPreferencesSchema>;
 export type JobOpportunity = typeof jobOpportunities.$inferSelect;
 export type InsertJobOpportunity = z.infer<typeof insertJobOpportunitySchema>;
+export type SavedJob = typeof savedJobs.$inferSelect;
+export type InsertSavedJob = z.infer<typeof insertSavedJobSchema>;

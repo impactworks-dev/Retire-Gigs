@@ -8,13 +8,16 @@ import {
   type InsertUserPreferences,
   type JobOpportunity,
   type InsertJobOpportunity,
+  type SavedJob,
+  type InsertSavedJob,
   users,
   questionnaireResponses,
   userPreferences,
-  jobOpportunities
+  jobOpportunities,
+  savedJobs
 } from "@shared/schema";
 import { db } from "./db";
-import { eq } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
 export interface IStorage {
@@ -36,6 +39,12 @@ export interface IStorage {
   getJobOpportunities(): Promise<JobOpportunity[]>;
   getMatchingJobs(userId: string): Promise<JobOpportunity[]>;
   createJobOpportunity(job: InsertJobOpportunity): Promise<JobOpportunity>;
+  
+  // Saved jobs operations
+  saveJob(userId: string, jobId: string): Promise<SavedJob>;
+  unsaveJob(userId: string, jobId: string): Promise<void>;
+  getUserSavedJobs(userId: string): Promise<JobOpportunity[]>;
+  isJobSaved(userId: string, jobId: string): Promise<boolean>;
 }
 
 export class MemStorage implements IStorage {
@@ -43,12 +52,14 @@ export class MemStorage implements IStorage {
   private questionnaireResponses: Map<string, QuestionnaireResponse>;
   private userPreferences: Map<string, UserPreferences>;
   private jobOpportunities: Map<string, JobOpportunity>;
+  private savedJobs: Map<string, SavedJob>;
 
   constructor() {
     this.users = new Map();
     this.questionnaireResponses = new Map();
     this.userPreferences = new Map();
     this.jobOpportunities = new Map();
+    this.savedJobs = new Map();
     
     // Initialize with some sample job opportunities
     this.initializeSampleJobs();
@@ -241,6 +252,46 @@ export class MemStorage implements IStorage {
     this.jobOpportunities.set(id, jobOpportunity);
     return jobOpportunity;
   }
+
+  async saveJob(userId: string, jobId: string): Promise<SavedJob> {
+    const id = randomUUID();
+    const savedJob: SavedJob = {
+      id,
+      userId,
+      jobId,
+      savedAt: new Date()
+    };
+    this.savedJobs.set(id, savedJob);
+    return savedJob;
+  }
+
+  async unsaveJob(userId: string, jobId: string): Promise<void> {
+    for (const [id, savedJob] of this.savedJobs.entries()) {
+      if (savedJob.userId === userId && savedJob.jobId === jobId) {
+        this.savedJobs.delete(id);
+        return;
+      }
+    }
+  }
+
+  async getUserSavedJobs(userId: string): Promise<JobOpportunity[]> {
+    const userSavedJobs = Array.from(this.savedJobs.values())
+      .filter(savedJob => savedJob.userId === userId);
+    
+    const jobs: JobOpportunity[] = [];
+    for (const savedJob of userSavedJobs) {
+      const job = this.jobOpportunities.get(savedJob.jobId);
+      if (job && job.isActive) {
+        jobs.push(job);
+      }
+    }
+    return jobs;
+  }
+
+  async isJobSaved(userId: string, jobId: string): Promise<boolean> {
+    return Array.from(this.savedJobs.values())
+      .some(savedJob => savedJob.userId === userId && savedJob.jobId === jobId);
+  }
 }
 
 // Database-backed storage implementation
@@ -338,6 +389,53 @@ export class DatabaseStorage implements IStorage {
       .values(job)
       .returning();
     return jobOpportunity;
+  }
+
+  async saveJob(userId: string, jobId: string): Promise<SavedJob> {
+    const [savedJob] = await db
+      .insert(savedJobs)
+      .values({ userId, jobId })
+      .returning();
+    return savedJob;
+  }
+
+  async unsaveJob(userId: string, jobId: string): Promise<void> {
+    await db
+      .delete(savedJobs)
+      .where(and(eq(savedJobs.userId, userId), eq(savedJobs.jobId, jobId)));
+  }
+
+  async getUserSavedJobs(userId: string): Promise<JobOpportunity[]> {
+    const results = await db
+      .select({
+        id: jobOpportunities.id,
+        title: jobOpportunities.title,
+        company: jobOpportunities.company,
+        location: jobOpportunities.location,
+        pay: jobOpportunities.pay,
+        schedule: jobOpportunities.schedule,
+        description: jobOpportunities.description,
+        tags: jobOpportunities.tags,
+        matchScore: jobOpportunities.matchScore,
+        timeAgo: jobOpportunities.timeAgo,
+        isActive: jobOpportunities.isActive,
+        createdAt: jobOpportunities.createdAt,
+      })
+      .from(savedJobs)
+      .innerJoin(jobOpportunities, eq(savedJobs.jobId, jobOpportunities.id))
+      .where(and(eq(savedJobs.userId, userId), eq(jobOpportunities.isActive, true)));
+    
+    return results;
+  }
+
+  async isJobSaved(userId: string, jobId: string): Promise<boolean> {
+    const [result] = await db
+      .select({ count: sql`1` })
+      .from(savedJobs)
+      .where(and(eq(savedJobs.userId, userId), eq(savedJobs.jobId, jobId)))
+      .limit(1);
+    
+    return !!result;
   }
 }
 
