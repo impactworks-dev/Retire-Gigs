@@ -15,6 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { ObjectUploader } from "@/components/ObjectUploader";
+import { Layout } from "@/components/layout";
 import { Plus, Trash2, Upload, FileText, Download, Star, Edit3, ArrowLeft, Home } from "lucide-react";
 import type { Resume } from "@shared/schema";
 import type { UploadResult } from "@uppy/core";
@@ -315,7 +316,8 @@ export default function ResumeBuilder() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-6xl">
+    <Layout>
+      <div className="container mx-auto px-4 py-8 max-w-6xl">
       {/* Header with navigation */}
       <div className="mb-8">
         <div className="flex items-center justify-between mb-4">
@@ -669,6 +671,7 @@ export default function ResumeBuilder() {
           </Form>
         </TabsContent>
       </Tabs>
-    </div>
+      </div>
+    </Layout>
   );
 }

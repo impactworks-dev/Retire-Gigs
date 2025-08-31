@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { Bookmark, ArrowLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { Layout } from "@/components/layout";
 import type { JobOpportunity } from "@shared/schema";
 
 interface SavedJobResponse {
@@ -26,20 +27,23 @@ export function SavedJobs() {
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">Please log in to view saved jobs</h1>
-          <Button asChild>
-            <Link href="/api/login">Log In</Link>
-          </Button>
+      <Layout>
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-gray-900 mb-4">Please log in to view saved jobs</h1>
+            <Button asChild>
+              <Link href="/api/login">Log In</Link>
+            </Button>
+          </div>
         </div>
-      </div>
+      </Layout>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-      <div className="container mx-auto px-4 py-8">
+    <Layout>
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+        <div className="container mx-auto px-4 py-8">
         {/* Header */}
         <div className="flex items-center mb-8">
           <Button
@@ -118,7 +122,8 @@ export function SavedJobs() {
             </div>
           </>
         )}
+        </div>
       </div>
-    </div>
+    </Layout>
   );
 }
