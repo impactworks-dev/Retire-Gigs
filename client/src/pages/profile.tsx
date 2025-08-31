@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { User, Settings, Calendar, Mail, LogOut, Edit3, MapPin, Briefcase } from "lucide-react";
+import { User, Settings, Calendar, Mail, LogOut, Edit3, MapPin, Briefcase, Navigation, Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -16,6 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import type { UserPreferences, User as UserType } from "@shared/schema";
 import type { SchedulePreference } from "@/types/questionnaire";
+import { getCurrentLocation, isLocationSupported } from "@/lib/location";
 
 export default function Profile() {
   const { user: authUser, isLoading: authLoading, isAuthenticated } = useAuth();
@@ -31,6 +32,7 @@ export default function Profile() {
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [preferredJobTypes, setPreferredJobTypes] = useState<string[]>([]);
   const [preferredLocations, setPreferredLocations] = useState<string[]>([]);
+  const [isGettingLocation, setIsGettingLocation] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -191,6 +193,62 @@ export default function Profile() {
     updatePreferencesMutation.mutate({ preferredLocations: newLocations });
   };
 
+  const handleGetCurrentLocation = async () => {
+    if (!isLocationSupported()) {
+      toast({
+        title: "Location not supported",
+        description: "Your browser doesn't support location services.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsGettingLocation(true);
+    try {
+      const location = await getCurrentLocation();
+      
+      // Reverse geocode the coordinates to get address
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${location.latitude}&lon=${location.longitude}&countrycodes=us`,
+        {
+          headers: {
+            'User-Agent': 'Retitree-Job-Market-Insights/1.0'
+          }
+        }
+      );
+      
+      if (response.ok) {
+        const data = await response.json();
+        const address = data.address;
+        
+        if (address) {
+          setStreetAddress(`${address.house_number || ''} ${address.road || ''}`.trim());
+          setCity(address.city || address.town || address.village || '');
+          setState(address.state || '');
+          setZipCode(address.postcode || '');
+          
+          toast({
+            title: "Location found!",
+            description: "Your address has been automatically filled in.",
+          });
+        } else {
+          throw new Error("No address found for your location");
+        }
+      } else {
+        throw new Error("Failed to get address information");
+      }
+    } catch (error) {
+      console.error("Location error:", error);
+      toast({
+        title: "Location error",
+        description: error instanceof Error ? error.message : "Failed to get your location. Please enter your address manually.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsGettingLocation(false);
+    }
+  };
+
   const handleLogout = () => {
     window.location.href = "/api/logout";
   };
@@ -305,10 +363,34 @@ export default function Profile() {
                       />
                     </div>
                     <div className="space-y-4">
-                      <h4 className="font-medium flex items-center">
-                        <MapPin className="w-4 h-4 mr-2" />
-                        Address
-                      </h4>
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-medium flex items-center">
+                          <MapPin className="w-4 h-4 mr-2" />
+                          Address
+                        </h4>
+                        {isLocationSupported() && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={handleGetCurrentLocation}
+                            disabled={isGettingLocation}
+                            data-testid="button-use-location-profile"
+                          >
+                            {isGettingLocation ? (
+                              <>
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                Getting Location...
+                              </>
+                            ) : (
+                              <>
+                                <Navigation className="w-4 h-4 mr-2" />
+                                Use Current Location
+                              </>
+                            )}
+                          </Button>
+                        )}
+                      </div>
                       
                       <div>
                         <Label htmlFor="streetAddress">Street Address</Label>

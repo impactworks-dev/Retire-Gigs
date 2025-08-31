@@ -130,6 +130,8 @@ export class MemStorage implements IStorage {
       city: null,
       state: null,
       zipCode: null,
+      latitude: null,
+      longitude: null,
       profileImageUrl: null,
       createdAt: new Date(),
       updatedAt: new Date()
@@ -154,6 +156,8 @@ export class MemStorage implements IStorage {
       city: userData.city || null,
       state: userData.state || null,
       zipCode: userData.zipCode || null,
+      latitude: userData.latitude || null,
+      longitude: userData.longitude || null,
       profileImageUrl: userData.profileImageUrl || null,
       createdAt: existingUser?.createdAt || new Date(),
       updatedAt: new Date()
@@ -255,24 +259,18 @@ export class DatabaseStorage implements IStorage {
   }
 
   async upsertUser(userData: UpsertUser): Promise<User> {
-    try {
-      console.log("Attempting upsert with data:", userData);
-      const [user] = await db
-        .insert(users)
-        .values(userData)
-        .onConflictDoUpdate({
-          target: users.id,
-          set: {
-            ...userData,
-            updatedAt: new Date(),
-          },
-        })
-        .returning();
-      return user;
-    } catch (error) {
-      console.error("Database upsert error:", error);
-      throw error;
-    }
+    const [user] = await db
+      .insert(users)
+      .values(userData)
+      .onConflictDoUpdate({
+        target: users.id,
+        set: {
+          ...userData,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+    return user;
   }
 
   async saveQuestionnaireResponse(response: InsertQuestionnaireResponse): Promise<QuestionnaireResponse> {

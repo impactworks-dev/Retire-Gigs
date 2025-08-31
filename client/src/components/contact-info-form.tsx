@@ -3,8 +3,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { User, Mail, MapPin, ChevronRight } from "lucide-react";
+import { User, Mail, MapPin, ChevronRight, Navigation, Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { getCurrentLocation, isLocationSupported } from "@/lib/location";
+import { useToast } from "@/hooks/use-toast";
 
 interface ContactInfoFormProps {
   onComplete: (contactInfo: {
@@ -20,6 +22,7 @@ interface ContactInfoFormProps {
 
 export function ContactInfoForm({ onComplete }: ContactInfoFormProps) {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [formData, setFormData] = useState({
     firstName: user?.firstName || "",
     lastName: user?.lastName || "",
@@ -29,10 +32,70 @@ export function ContactInfoForm({ onComplete }: ContactInfoFormProps) {
     state: "",
     zipCode: ""
   });
+  const [isGettingLocation, setIsGettingLocation] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onComplete(formData);
+  };
+
+  const handleGetCurrentLocation = async () => {
+    if (!isLocationSupported()) {
+      toast({
+        title: "Location not supported",
+        description: "Your browser doesn't support location services.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsGettingLocation(true);
+    try {
+      const location = await getCurrentLocation();
+      
+      // Reverse geocode the coordinates to get address
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${location.latitude}&lon=${location.longitude}&countrycodes=us`,
+        {
+          headers: {
+            'User-Agent': 'Retitree-Job-Market-Insights/1.0'
+          }
+        }
+      );
+      
+      if (response.ok) {
+        const data = await response.json();
+        const address = data.address;
+        
+        if (address) {
+          setFormData(prev => ({
+            ...prev,
+            streetAddress: `${address.house_number || ''} ${address.road || ''}`.trim(),
+            city: address.city || address.town || address.village || '',
+            state: address.state || '',
+            zipCode: address.postcode || ''
+          }));
+          
+          toast({
+            title: "Location found!",
+            description: "Your address has been automatically filled in.",
+          });
+        } else {
+          throw new Error("No address found for your location");
+        }
+      } else {
+        throw new Error("Failed to get address information");
+      }
+    } catch (error) {
+      console.error("Location error:", error);
+      toast({
+        title: "Location error",
+        description: error instanceof Error ? error.message : "Failed to get your location. Please enter your address manually.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsGettingLocation(false);
+    }
   };
 
   const isValid = formData.firstName && formData.lastName && formData.email && formData.streetAddress && formData.city && formData.state && formData.zipCode;
@@ -107,13 +170,39 @@ export function ContactInfoForm({ onComplete }: ContactInfoFormProps) {
             </div>
 
             <div className="space-y-4">
-              <h3 className="text-lg font-medium flex items-center">
-                <MapPin className="w-4 h-4 mr-2" />
-                Your Address
-              </h3>
-              <p className="text-sm text-gray-500">
-                This helps us find jobs close to you and reduces commute time.
-              </p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-medium flex items-center">
+                    <MapPin className="w-4 h-4 mr-2" />
+                    Your Address
+                  </h3>
+                  <p className="text-sm text-gray-500">
+                    This helps us find jobs close to you and reduces commute time.
+                  </p>
+                </div>
+                {isLocationSupported() && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleGetCurrentLocation}
+                    disabled={isGettingLocation}
+                    className="ml-4"
+                    data-testid="button-use-location"
+                  >
+                    {isGettingLocation ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Getting Location...
+                      </>
+                    ) : (
+                      <>
+                        <Navigation className="w-4 h-4 mr-2" />
+                        Use Current Location
+                      </>
+                    )}
+                  </Button>
+                )}
+              </div>
               
               <div>
                 <Label htmlFor="streetAddress" className="text-base font-medium mb-2 block">

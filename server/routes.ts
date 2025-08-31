@@ -10,6 +10,7 @@ import {
 import cron from "node-cron";
 import nodemailer from "nodemailer";
 import { setupAuth, isAuthenticated } from "./replitAuth";
+import { geocodeAddress } from "./geocoding";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
@@ -73,6 +74,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         city: updates.city,
         state: updates.state,
         zipCode: updates.zipCode,
+        latitude: updates.latitude,
+        longitude: updates.longitude,
         profileImageUrl: updates.profileImageUrl
       };
       
@@ -82,6 +85,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
       
       console.log("Filtered updates:", filteredUpdates);
+      
+      // Geocode address if any address fields were updated
+      let geocodeResult = null;
+      if (filteredUpdates.streetAddress || filteredUpdates.city || filteredUpdates.state || filteredUpdates.zipCode) {
+        const addressToGeocode = {
+          streetAddress: filteredUpdates.streetAddress || existingUser.streetAddress,
+          city: filteredUpdates.city || existingUser.city,
+          state: filteredUpdates.state || existingUser.state,
+          zipCode: filteredUpdates.zipCode || existingUser.zipCode
+        };
+        
+        console.log("Attempting to geocode address:", addressToGeocode);
+        geocodeResult = await geocodeAddress(addressToGeocode);
+        
+        if (geocodeResult) {
+          console.log("Geocoding successful:", geocodeResult);
+          filteredUpdates.latitude = geocodeResult.latitude;
+          filteredUpdates.longitude = geocodeResult.longitude;
+        } else {
+          console.log("Geocoding failed or no results");
+        }
+      }
       
       // Merge with existing user data to ensure all required fields are present
       const userUpdateData = {
