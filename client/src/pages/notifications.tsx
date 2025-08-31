@@ -98,26 +98,26 @@ export default function Notifications() {
     },
   });
 
-  // Test notification mutation
-  const testNotificationMutation = useMutation({
+  // Test email mutation
+  const testEmailMutation = useMutation({
     mutationFn: async () => {
-      const response = await fetch("/api/test-notifications", {
+      const response = await fetch("/api/test-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
-      if (!response.ok) throw new Error("Failed to send test notification");
+      if (!response.ok) throw new Error("Failed to send test email");
       return response.json();
     },
     onSuccess: () => {
       toast({
-        title: "Test Notification Sent",
-        description: "Check your email for a test job notification.",
+        title: "Test Email Sent",
+        description: "Check dante@impactworks.com for the test email.",
       });
     },
-    onError: () => {
+    onError: (error) => {
       toast({
-        title: "Error",
-        description: "Failed to send test notification.",
+        title: "Email Test Failed",
+        description: "There was an issue sending the test email. Check the console for details.",
         variant: "destructive",
       });
     },
@@ -382,14 +382,14 @@ export default function Notifications() {
                   Send a test notification to verify your settings are working correctly.
                 </p>
                 <Button
-                  onClick={() => testNotificationMutation.mutate()}
+                  onClick={() => testEmailMutation.mutate()}
                   variant="outline"
                   size="sm"
-                  disabled={testNotificationMutation.isPending}
+                  disabled={testEmailMutation.isPending}
                   className="w-full"
-                  data-testid="button-test-notification"
+                  data-testid="button-test-email"
                 >
-                  {testNotificationMutation.isPending ? "Sending..." : "Send Test Email"}
+                  {testEmailMutation.isPending ? "Sending..." : "Send Test Email to Dante"}
                 </Button>
               </CardContent>
             </Card>

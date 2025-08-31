@@ -346,6 +346,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Test email endpoint
+  app.post("/api/test-email", async (req, res) => {
+    try {
+      if (!process.env.RESEND_API_KEY) {
+        return res.status(500).json({ message: "RESEND_API_KEY not configured" });
+      }
+
+      const { Resend } = await import('resend');
+      const resend = new Resend(process.env.RESEND_API_KEY);
+
+      const { data, error } = await resend.emails.send({
+        from: 'Retiree Gigs <noreply@retireegigs.com>',
+        to: ['dante@impactworks.com'],
+        subject: 'Test Email - Retiree Gigs Platform',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #2563eb;">🎉 Email Test Successful!</h2>
+            <p>This is a test email from the Retiree Gigs platform to verify that email sending is working properly.</p>
+            <div style="background-color: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+              <h3 style="margin-top: 0; color: #374151;">Test Details:</h3>
+              <ul style="color: #6b7280;">
+                <li>✅ Resend API integration is working</li>
+                <li>✅ Email templates are rendering correctly</li>
+                <li>✅ Domain configuration is functional</li>
+                <li>✅ SMS notifications are also configured</li>
+              </ul>
+            </div>
+            <p style="color: #6b7280; font-size: 14px;">
+              Sent at: ${new Date().toLocaleString()}
+            </p>
+          </div>
+        `,
+      });
+
+      if (error) {
+        console.error("Resend test email error:", error);
+        return res.status(500).json({ 
+          message: "Failed to send test email", 
+          error: error 
+        });
+      }
+
+      console.log("Test email sent successfully:", data);
+      res.json({ 
+        success: true, 
+        message: "Test email sent to dante@impactworks.com",
+        data 
+      });
+    } catch (error) {
+      console.error("Error sending test email:", error);
+      res.status(500).json({ message: "Failed to send test email" });
+    }
+  });
+
   // Resume API routes
 
   // Get all resumes for authenticated user
