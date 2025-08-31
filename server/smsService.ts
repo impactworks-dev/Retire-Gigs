@@ -8,7 +8,16 @@ export class SmsService {
     const authToken = process.env.TWILIO_AUTH_TOKEN;
     
     if (accountSid && authToken) {
-      this.twilioClient = twilio(accountSid, authToken);
+      try {
+        // Only initialize if credentials appear valid
+        if (accountSid.startsWith('AC')) {
+          this.twilioClient = twilio(accountSid, authToken);
+        } else {
+          console.warn('Invalid Twilio Account SID - must start with "AC". SMS notifications will be disabled');
+        }
+      } catch (error) {
+        console.warn('Failed to initialize Twilio client - SMS notifications will be disabled:', error);
+      }
     } else {
       console.warn('Twilio credentials not configured - SMS notifications will be disabled');
     }

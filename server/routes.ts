@@ -551,7 +551,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ success: true });
     } catch (error) {
       console.error("Error setting default resume:", error);
-      res.status(400).json({ message: error.message || "Failed to set default resume" });
+      res.status(400).json({ message: (error as Error).message || "Failed to set default resume" });
     }
   });
 
@@ -564,7 +564,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Resume file access endpoint
   app.get("/objects/:objectPath(*)", isAuthenticated, async (req, res) => {
-    const userId = req.user?.claims?.sub;
+    const userId = (req.user as any)?.claims?.sub;
     const objectStorageService = new ObjectStorageService();
     try {
       const objectFile = await objectStorageService.getObjectEntityFile(
