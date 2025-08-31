@@ -43,7 +43,7 @@ export interface IStorage {
   // Saved jobs operations
   saveJob(userId: string, jobId: string): Promise<SavedJob>;
   unsaveJob(userId: string, jobId: string): Promise<void>;
-  getUserSavedJobs(userId: string): Promise<JobOpportunity[]>;
+  getUserSavedJobs(userId: string): Promise<Array<{ id: string; userId: string; jobId: string; savedAt: Date; job: JobOpportunity }>>;
   isJobSaved(userId: string, jobId: string): Promise<boolean>;
 }
 
@@ -266,7 +266,8 @@ export class MemStorage implements IStorage {
   }
 
   async unsaveJob(userId: string, jobId: string): Promise<void> {
-    for (const [id, savedJob] of this.savedJobs.entries()) {
+    const entries = Array.from(this.savedJobs.entries());
+    for (const [id, savedJob] of entries) {
       if (savedJob.userId === userId && savedJob.jobId === jobId) {
         this.savedJobs.delete(id);
         return;
@@ -274,18 +275,24 @@ export class MemStorage implements IStorage {
     }
   }
 
-  async getUserSavedJobs(userId: string): Promise<JobOpportunity[]> {
+  async getUserSavedJobs(userId: string): Promise<Array<{ id: string; userId: string; jobId: string; savedAt: Date; job: JobOpportunity }>> {
     const userSavedJobs = Array.from(this.savedJobs.values())
       .filter(savedJob => savedJob.userId === userId);
     
-    const jobs: JobOpportunity[] = [];
+    const result: Array<{ id: string; userId: string; jobId: string; savedAt: Date; job: JobOpportunity }> = [];
     for (const savedJob of userSavedJobs) {
       const job = this.jobOpportunities.get(savedJob.jobId);
       if (job && job.isActive) {
-        jobs.push(job);
+        result.push({
+          id: savedJob.id,
+          userId: savedJob.userId,
+          jobId: savedJob.jobId,
+          savedAt: savedJob.savedAt || new Date(),
+          job: job
+        });
       }
     }
-    return jobs;
+    return result;
   }
 
   async isJobSaved(userId: string, jobId: string): Promise<boolean> {
@@ -395,7 +402,18 @@ export class DatabaseStorage implements IStorage {
     const [savedJob] = await db
       .insert(savedJobs)
       .values({ userId, jobId })
+      .onConflictDoNothing()
       .returning();
+    
+    // If no savedJob was returned due to conflict, fetch the existing one
+    if (!savedJob) {
+      const [existing] = await db
+        .select()
+        .from(savedJobs)
+        .where(and(eq(savedJobs.userId, userId), eq(savedJobs.jobId, jobId)));
+      return existing;
+    }
+    
     return savedJob;
   }
 
@@ -405,27 +423,20 @@ export class DatabaseStorage implements IStorage {
       .where(and(eq(savedJobs.userId, userId), eq(savedJobs.jobId, jobId)));
   }
 
-  async getUserSavedJobs(userId: string): Promise<JobOpportunity[]> {
+  async getUserSavedJobs(userId: string): Promise<Array<{ id: string; userId: string; jobId: string; savedAt: Date; job: JobOpportunity }>> {
     const results = await db
-      .select({
-        id: jobOpportunities.id,
-        title: jobOpportunities.title,
-        company: jobOpportunities.company,
-        location: jobOpportunities.location,
-        pay: jobOpportunities.pay,
-        schedule: jobOpportunities.schedule,
-        description: jobOpportunities.description,
-        tags: jobOpportunities.tags,
-        matchScore: jobOpportunities.matchScore,
-        timeAgo: jobOpportunities.timeAgo,
-        isActive: jobOpportunities.isActive,
-        createdAt: jobOpportunities.createdAt,
-      })
+      .select()
       .from(savedJobs)
       .innerJoin(jobOpportunities, eq(savedJobs.jobId, jobOpportunities.id))
       .where(and(eq(savedJobs.userId, userId), eq(jobOpportunities.isActive, true)));
     
-    return results;
+    return results.map(result => ({
+      id: result.saved_jobs.id,
+      userId: result.saved_jobs.userId,
+      jobId: result.saved_jobs.jobId,
+      savedAt: result.saved_jobs.savedAt || new Date(),
+      job: result.job_opportunities
+    }));
   }
 
   async isJobSaved(userId: string, jobId: string): Promise<boolean> {
