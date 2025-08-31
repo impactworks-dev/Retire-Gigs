@@ -424,10 +424,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       console.log(`Test SMS sent successfully to ${phoneNumber}, SID: ${message.sid}`);
+      console.log(`Message status: ${message.status}, From: ${process.env.TWILIO_PHONE_NUMBER}, To: ${phoneNumber}`);
+      console.log(`Full message object:`, JSON.stringify(message, null, 2));
+      
       res.json({ 
         success: true, 
         message: `Test SMS sent to ${phoneNumber}`,
-        sid: message.sid
+        sid: message.sid,
+        status: message.status,
+        from: process.env.TWILIO_PHONE_NUMBER
       });
     } catch (error) {
       console.error("Error sending test SMS:", error);
