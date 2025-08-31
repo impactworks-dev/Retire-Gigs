@@ -1,9 +1,20 @@
 
 import { storage } from "./storage";
-import { Resend } from "@resend/node";
+import nodemailer from "nodemailer";
 import type { User, UserPreferences, QuestionnaireResponse, JobOpportunity } from "@shared/schema";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Configure nodemailer transporter
+const createTransporter = () => {
+  return nodemailer.createTransport({
+    host: process.env.SMTP_HOST || "smtp.ethereal.email",
+    port: 587,
+    secure: false,
+    auth: {
+      user: process.env.SMTP_USER || "test@example.com",
+      pass: process.env.SMTP_PASS || "password"
+    }
+  });
+};
 
 export class JobMatchingService {
   async findMatchingJobsForUser(userId: string): Promise<JobOpportunity[]> {
@@ -85,7 +96,7 @@ export class JobMatchingService {
           
           if (dislikedWork.includes('customer-service') && 
               (job.description.toLowerCase().includes('customer') || 
-               job.tags.includes('social'))) {
+               (Array.isArray(job.tags) && job.tags.includes('social')))) {
             return false;
           }
           
@@ -107,9 +118,10 @@ export class JobMatchingService {
 
     try {
       const emailContent = this.generateEmailContent(user, jobs);
+      const transporter = createTransporter();
       
-      await resend.emails.send({
-        from: 'Retiree Gigs <jobs@retireegigs.com>',
+      await transporter.sendMail({
+        from: '"Retiree Gigs" <jobs@retireegigs.com>',
         to: user.email,
         subject: `${jobs.length} New Job Match${jobs.length > 1 ? 'es' : ''} Found!`,
         html: emailContent

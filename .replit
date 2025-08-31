@@ -85,4 +85,3 @@ task = "shell.exec"
 args = "echo \"Job notification process completed!\""
 
 [agent]
-integrations = ["javascript_database==1.0.0", "javascript_object_storage==1.0.0", "javascript_log_in_with_replit==1.0.0"]
