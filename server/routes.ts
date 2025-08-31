@@ -35,7 +35,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: "Failed to fetch user" });
     }
   });
-  
+
   // User creation (age verification) - keeping for backwards compatibility
   app.post("/api/users", async (req, res) => {
     try {
@@ -52,7 +52,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { userId } = req.params;
       const authenticatedUserId = req.user.claims.sub;
-      
+
       // Users can only update their own profile
       if (userId !== authenticatedUserId) {
         return res.status(403).json({ message: "Forbidden" });
@@ -61,18 +61,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updates = req.body;
       console.log("Received update request for user:", userId);
       console.log("Update data:", updates);
-      
+
       // Validate that we have valid data
       if (!updates || typeof updates !== 'object') {
         return res.status(400).json({ message: "Invalid update data" });
       }
-      
+
       // Get existing user data first
       const existingUser = await storage.getUser(userId);
       if (!existingUser) {
         return res.status(404).json({ message: "User not found" });
       }
-      
+
       // For updates, we need to create a partial schema that allows the fields we want to update
       const allowedUpdateFields = {
         firstName: updates.firstName,
@@ -86,14 +86,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         longitude: updates.longitude,
         profileImageUrl: updates.profileImageUrl
       };
-      
+
       // Remove undefined fields
       const filteredUpdates = Object.fromEntries(
         Object.entries(allowedUpdateFields).filter(([_, value]) => value !== undefined)
       );
-      
+
       console.log("Filtered updates:", filteredUpdates);
-      
+
       // Geocode address if any address fields were updated
       let geocodeResult = null;
       if (filteredUpdates.streetAddress || filteredUpdates.city || filteredUpdates.state || filteredUpdates.zipCode) {
@@ -103,10 +103,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           state: filteredUpdates.state || existingUser.state,
           zipCode: filteredUpdates.zipCode || existingUser.zipCode
         };
-        
+
         console.log("Attempting to geocode address:", addressToGeocode);
         geocodeResult = await geocodeAddress(addressToGeocode);
-        
+
         if (geocodeResult) {
           console.log("Geocoding successful:", geocodeResult);
           filteredUpdates.latitude = geocodeResult.latitude;
@@ -115,7 +115,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log("Geocoding failed or no results");
         }
       }
-      
+
       // Merge with existing user data to ensure all required fields are present
       const userUpdateData = {
         ...existingUser,
@@ -123,7 +123,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         id: userId,
         updatedAt: new Date()
       };
-      
+
       const user = await storage.upsertUser(userUpdateData);
       res.json(user);
     } catch (error) {
@@ -268,11 +268,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.claims.sub;
       const { jobId } = req.body;
-      
+
       if (!jobId) {
         return res.status(400).json({ message: "Job ID is required" });
       }
-      
+
       const savedJob = await storage.saveJob(userId, jobId);
       res.json(savedJob);
     } catch (error) {
@@ -285,7 +285,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.claims.sub;
       const { jobId } = req.params;
-      
+
       await storage.unsaveJob(userId, jobId);
       res.json({ message: "Job unsaved successfully" });
     } catch (error) {
@@ -309,7 +309,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.claims.sub;
       const { jobId } = req.params;
-      
+
       const isSaved = await storage.isJobSaved(userId, jobId);
       res.json({ isSaved });
     } catch (error) {
@@ -322,33 +322,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/send-notification", async (req, res) => {
     try {
       const { email, subject, content } = req.body;
-      
-      // Configure nodemailer (would use real SMTP in production)
-      const transporter = nodemailer.createTransport({
-        host: process.env.SMTP_HOST || "smtp.ethereal.email",
-        port: 587,
-        secure: false,
-        auth: {
-          user: process.env.SMTP_USER || "test@example.com",
-          pass: process.env.SMTP_PASS || "password"
-        }
-      });
 
-      await transporter.sendMail({
-        from: '"Retiree Gigs" <noreply@retireegigs.com>',
-        to: email,
+      const { Resend } = await import('resend');
+      const resend = new Resend(process.env.RESEND_API_KEY);
+
+      const { data, error } = await resend.emails.send({
+        from: 'Retiree Gigs <noreply@retireegigs.com>',
+        to: [email],
         subject,
-        html: content
+        html: content,
       });
 
-      res.json({ success: true });
+      if (error) {
+        console.error("Resend error:", error);
+        return res.status(500).json({ message: "Failed to send notification" });
+      }
+
+      res.json({ success: true, data });
     } catch (error) {
+      console.error("Error sending notification:", error);
       res.status(500).json({ message: "Failed to send notification" });
     }
   });
 
   // Resume API routes
-  
+
   // Get all resumes for authenticated user
   app.get("/api/resumes", isAuthenticated, async (req: any, res) => {
     try {
@@ -366,17 +364,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.claims.sub;
       const { id } = req.params;
-      
+
       const resume = await storage.getResume(id);
       if (!resume) {
         return res.status(404).json({ message: "Resume not found" });
       }
-      
+
       // Users can only access their own resumes
       if (resume.userId !== userId) {
         return res.status(403).json({ message: "Forbidden" });
       }
-      
+
       res.json(resume);
     } catch (error) {
       console.error("Error fetching resume:", error);
@@ -392,7 +390,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...req.body,
         userId
       });
-      
+
       const resume = await storage.createResume(resumeData);
       res.json(resume);
     } catch (error) {
@@ -406,17 +404,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.claims.sub;
       const { id } = req.params;
-      
+
       // Check if resume exists and belongs to user
       const existingResume = await storage.getResume(id);
       if (!existingResume) {
         return res.status(404).json({ message: "Resume not found" });
       }
-      
+
       if (existingResume.userId !== userId) {
         return res.status(403).json({ message: "Forbidden" });
       }
-      
+
       const updates = req.body;
       const updatedResume = await storage.updateResume(id, updates);
       res.json(updatedResume);
@@ -431,17 +429,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.claims.sub;
       const { id } = req.params;
-      
+
       // Check if resume exists and belongs to user
       const existingResume = await storage.getResume(id);
       if (!existingResume) {
         return res.status(404).json({ message: "Resume not found" });
       }
-      
+
       if (existingResume.userId !== userId) {
         return res.status(403).json({ message: "Forbidden" });
       }
-      
+
       await storage.deleteResume(id);
       res.json({ success: true });
     } catch (error) {
@@ -455,7 +453,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.claims.sub;
       const { id } = req.params;
-      
+
       await storage.setDefaultResume(userId, id);
       res.json({ success: true });
     } catch (error) {
@@ -502,7 +500,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user.claims.sub;
       const { id } = req.params;
-      
+
       if (!req.body.uploadedFileUrl) {
         return res.status(400).json({ error: "uploadedFileUrl is required" });
       }
@@ -512,7 +510,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!existingResume) {
         return res.status(404).json({ message: "Resume not found" });
       }
-      
+
       if (existingResume.userId !== userId) {
         return res.status(403).json({ message: "Forbidden" });
       }
@@ -585,7 +583,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         timeAgo: "Just posted",
         isActive: true
       });
-      
+
       const job = await storage.createJobOpportunity(processedJob);
       res.json({ success: true, job });
     } catch (error) {

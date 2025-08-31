@@ -1,20 +1,9 @@
-
-import { storage } from "./storage";
-import nodemailer from "nodemailer";
+import { Resend } from 'resend';
 import type { User, UserPreferences, QuestionnaireResponse, JobOpportunity } from "@shared/schema";
+import { storage } from "./storage";
 
-// Configure nodemailer transporter
-const createTransporter = () => {
-  return nodemailer.createTransport({
-    host: process.env.SMTP_HOST || "smtp.ethereal.email",
-    port: 587,
-    secure: false,
-    auth: {
-      user: process.env.SMTP_USER || "test@example.com",
-      pass: process.env.SMTP_PASS || "password"
-    }
-  });
-};
+// Configure Resend
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 export class JobMatchingService {
   async findMatchingJobsForUser(userId: string): Promise<JobOpportunity[]> {
@@ -26,7 +15,7 @@ export class JobMatchingService {
       // Get user preferences and questionnaire responses
       const preferences = await storage.getUserPreferences(userId);
       const questionnaireResponse = await storage.getQuestionnaireResponse(userId);
-      
+
       // Get all active jobs
       const allJobs = await storage.getJobOpportunities();
       const activeJobs = allJobs.filter(job => job.isActive);
@@ -40,8 +29,8 @@ export class JobMatchingService {
   }
 
   private filterJobsByCriteria(
-    jobs: JobOpportunity[], 
-    user: User, 
+    jobs: JobOpportunity[],
+    user: User,
     preferences: UserPreferences | undefined,
     questionnaireResponse: QuestionnaireResponse | undefined
   ): JobOpportunity[] {
@@ -49,12 +38,12 @@ export class JobMatchingService {
       // Location-based filtering
       if (user.latitude && user.longitude) {
         // Check if job is within reasonable distance (simplified)
-        const isLocalJob = job.location.toLowerCase().includes('close to home') || 
+        const isLocalJob = job.location.toLowerCase().includes('close to home') ||
                           job.location.toLowerCase().includes('within') ||
                           job.location.toLowerCase().includes('local');
-        
+
         const isRemoteJob = job.location.toLowerCase().includes('remote');
-        
+
         // Include remote jobs and local jobs
         if (!isLocalJob && !isRemoteJob) {
           // For other locations, we'd need more sophisticated distance calculation
@@ -63,17 +52,17 @@ export class JobMatchingService {
 
       // Filter by preferred job types
       if (preferences?.preferredJobTypes) {
-        const preferredTypes = Array.isArray(preferences.preferredJobTypes) 
-          ? preferences.preferredJobTypes 
+        const preferredTypes = Array.isArray(preferences.preferredJobTypes)
+          ? preferences.preferredJobTypes
           : [];
-        
+
         const jobTags = Array.isArray(job.tags) ? job.tags : [];
-        
+
         // Check if job has any preferred tags
-        const hasPreferredTag = preferredTypes.some(type => 
+        const hasPreferredTag = preferredTypes.some(type =>
           jobTags.includes(type)
         );
-        
+
         if (preferredTypes.length > 0 && !hasPreferredTag) {
           return false;
         }
@@ -82,25 +71,25 @@ export class JobMatchingService {
       // Filter based on questionnaire responses
       if (questionnaireResponse?.responses) {
         const responses = questionnaireResponse.responses as any;
-        
+
         // Check for job dislikes from question 3
         if (responses['3']) {
           const dislikedWork = Array.isArray(responses['3']) ? responses['3'] : [responses['3']];
-          
+
           // Filter out jobs that match disliked work types
-          if (dislikedWork.includes('physical') && 
-              (job.description.toLowerCase().includes('lifting') || 
+          if (dislikedWork.includes('physical') &&
+              (job.description.toLowerCase().includes('lifting') ||
                job.description.toLowerCase().includes('physical'))) {
             return false;
           }
-          
-          if (dislikedWork.includes('customer-service') && 
-              (job.description.toLowerCase().includes('customer') || 
+
+          if (dislikedWork.includes('customer-service') &&
+              (job.description.toLowerCase().includes('customer') ||
                (Array.isArray(job.tags) && job.tags.includes('social')))) {
             return false;
           }
-          
-          if (dislikedWork.includes('computer-heavy') && 
+
+          if (dislikedWork.includes('computer-heavy') &&
               job.description.toLowerCase().includes('computer')) {
             return false;
           }
@@ -118,14 +107,18 @@ export class JobMatchingService {
 
     try {
       const emailContent = this.generateEmailContent(user, jobs);
-      const transporter = createTransporter();
-      
-      await transporter.sendMail({
-        from: '"Retiree Gigs" <jobs@retireegigs.com>',
+
+      const sendResult = await resend.emails.send({
+        from: 'jobs@retireegigs.com',
         to: user.email,
         subject: `${jobs.length} New Job Match${jobs.length > 1 ? 'es' : ''} Found!`,
-        html: emailContent
+        html: emailContent,
       });
+
+      if (sendResult.error) {
+        console.error(`Error sending email notification to ${user.email}:`, sendResult.error);
+        return false;
+      }
 
       console.log(`Email notification sent to ${user.email} for ${jobs.length} jobs`);
       return true;
@@ -133,6 +126,16 @@ export class JobMatchingService {
       console.error("Error sending email notification:", error);
       return false;
     }
+  }
+
+  // Placeholder for sending SMS notifications
+  async sendJobNotificationSms(user: User, jobs: JobOpportunity[]): Promise<boolean> {
+    if (!user.phoneNumber || jobs.length === 0) {
+      return false;
+    }
+    // TODO: Implement SMS notification logic using a service like Twilio or Resend's SMS API
+    console.warn(`SMS notification not implemented for user ${user.id}`);
+    return false;
   }
 
   private generateEmailContent(user: User, jobs: JobOpportunity[]): string {
@@ -143,7 +146,7 @@ export class JobMatchingService {
         <p style="color: #059669; font-weight: bold; margin: 4px 0;">${job.pay} • ${job.schedule}</p>
         <p style="color: #64748b; margin: 8px 0;">${job.description}</p>
         <div style="margin-top: 12px;">
-          ${Array.isArray(job.tags) ? job.tags.map(tag => 
+          ${Array.isArray(job.tags) ? job.tags.map(tag =>
             `<span style="background: #dbeafe; color: #1e40af; padding: 4px 8px; border-radius: 4px; font-size: 12px; margin-right: 4px;">${tag}</span>`
           ).join('') : ''}
         </div>
@@ -162,22 +165,22 @@ export class JobMatchingService {
           <h1 style="color: #1e40af; margin-bottom: 8px;">New Job Matches!</h1>
           <p style="color: #64748b;">Hi ${user.firstName || 'there'}! We found ${jobs.length} new job${jobs.length > 1 ? 's' : ''} that match your preferences.</p>
         </div>
-        
+
         ${jobsHtml}
-        
+
         ${jobs.length > 5 ? `
           <div style="text-align: center; margin: 20px 0; padding: 16px; background: #f1f5f9; border-radius: 8px;">
             <p style="margin: 0; color: #475569;">And ${jobs.length - 5} more job${jobs.length - 5 > 1 ? 's' : ''}!</p>
           </div>
         ` : ''}
-        
+
         <div style="text-align: center; margin-top: 30px; padding: 20px; background: #f8fafc; border-radius: 8px;">
-          <a href="${process.env.CLIENT_URL || 'https://your-app.replit.app'}/dashboard" 
+          <a href="${process.env.CLIENT_URL || 'https://your-app.replit.app'}/dashboard"
              style="background: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">
             View All Jobs
           </a>
         </div>
-        
+
         <div style="text-align: center; margin-top: 20px; font-size: 12px; color: #94a3b8;">
           <p>You're receiving this because you have job notifications enabled.</p>
           <p><a href="${process.env.CLIENT_URL || 'https://your-app.replit.app'}/profile" style="color: #2563eb;">Update your preferences</a></p>
@@ -190,7 +193,7 @@ export class JobMatchingService {
   async processAllUserNotifications(): Promise<void> {
     try {
       console.log("Starting job notification process...");
-      
+
       // Get all users with notifications enabled
       const users = await storage.getAllUsers();
       const usersWithNotifications = users.filter(user => {
@@ -210,15 +213,18 @@ export class JobMatchingService {
 
           // Find matching jobs
           const matchingJobs = await this.findMatchingJobsForUser(user.id);
-          
+
           if (matchingJobs.length > 0) {
             // Only send notifications for great and good matches
-            const notifiableJobs = matchingJobs.filter(job => 
+            const notifiableJobs = matchingJobs.filter(job =>
               job.matchScore === 'great' || job.matchScore === 'good'
             );
 
             if (notifiableJobs.length > 0) {
               const emailSent = await this.sendJobNotificationEmail(user, notifiableJobs);
+              // TODO: Add logic to send SMS notifications if enabled and email fails or is not preferred
+              // const smsSent = await this.sendJobNotificationSms(user, notifiableJobs);
+
               if (emailSent) {
                 console.log(`Notification sent to ${user.email}: ${notifiableJobs.length} jobs`);
               }

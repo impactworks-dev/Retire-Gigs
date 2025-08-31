@@ -1,4 +1,4 @@
-import { Menu, Briefcase, User, LogOut, Bookmark, FileText, Newspaper } from "lucide-react";
+import { Menu, Briefcase, User, LogOut, Bookmark, FileText, Newspaper, Bell } from "lucide-react";
 import { Link } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -34,12 +34,12 @@ export function Layout({ children }: LayoutProps) {
                 <h1 className="text-xl font-semibold text-gray-900">Retiree Gigs</h1>
               </div>
             </Link>
-            
+
             {isAuthenticated ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button 
-                    variant="ghost" 
+                  <Button
+                    variant="ghost"
                     size="sm"
                     className="p-2 text-gray-600 hover:text-gray-900 rounded-lg"
                     data-testid="menu-button"
@@ -49,21 +49,29 @@ export function Layout({ children }: LayoutProps) {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem asChild>
-                    <Link href="/news">
-                      <Newspaper className="w-4 h-4 mr-2" />
-                      News & Insights
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
                     <Link href="/saved-jobs">
                       <Bookmark className="w-4 h-4 mr-2" />
                       Saved Jobs
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <Link href="/resume-builder">
+                    <Link href="/resumes">
                       <FileText className="w-4 h-4 mr-2" />
                       Resume Builder
+                    </Link>
+                  </DropdownMenuItem>
+
+                  <DropdownMenuItem asChild>
+                    <Link href="/notifications">
+                      <Bell className="w-4 h-4 mr-2" />
+                      Notifications
+                    </Link>
+                  </DropdownMenuItem>
+
+                  <DropdownMenuItem asChild>
+                    <Link href="/news">
+                      <Newspaper className="w-4 h-4 mr-2" />
+                      News & Resources
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
@@ -80,8 +88,8 @@ export function Layout({ children }: LayoutProps) {
               </DropdownMenu>
             ) : (
               <Link href="/login">
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   size="sm"
                   data-testid="button-login-nav"
                 >
