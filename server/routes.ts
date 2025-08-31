@@ -418,7 +418,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 
       const message = await client.messages.create({
-        body: `🎉 SMS Test Successful! This is a test message from Retiree Gigs platform. Your SMS notifications are working properly. Sent at: ${new Date().toLocaleString()}`,
+        body: `SMS Test: This is a test message from Retiree Gigs. If you receive this, SMS notifications are working. Sent at ${new Date().toLocaleString()}`,
         from: process.env.TWILIO_PHONE_NUMBER,
         to: phoneNumber,
       });
