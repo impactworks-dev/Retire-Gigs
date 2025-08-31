@@ -1,35 +1,38 @@
-import { Resend } from 'resend';
+import twilio from 'twilio';
 
 export class SmsService {
-  private resend: Resend | null = null;
+  private twilioClient: twilio.Twilio | null = null;
 
   constructor() {
-    const apiKey = process.env.RESEND_API_KEY;
-    if (apiKey) {
-      this.resend = new Resend(apiKey);
+    const accountSid = process.env.TWILIO_ACCOUNT_SID;
+    const authToken = process.env.TWILIO_AUTH_TOKEN;
+    
+    if (accountSid && authToken) {
+      this.twilioClient = twilio(accountSid, authToken);
     } else {
-      console.warn('RESEND_API_KEY not configured - SMS notifications will be disabled');
+      console.warn('Twilio credentials not configured - SMS notifications will be disabled');
     }
   }
 
   async sendSms(phoneNumber: string, message: string): Promise<boolean> {
-    if (!this.resend) {
+    if (!this.twilioClient) {
       console.warn('SMS service not configured - skipping SMS notification');
       return false;
     }
 
-    try {
-      // Note: As of 2024, Resend primarily focuses on email. 
-      // If they don't support SMS yet, we'll prepare the structure for when they do
-      // or switch to Twilio in the future
-      console.log(`SMS would be sent to ${phoneNumber}: ${message}`);
-      
-      // Placeholder for actual SMS sending when Resend supports it
-      // await this.resend.sms.send({
-      //   to: phoneNumber,
-      //   text: message,
-      // });
+    if (!process.env.TWILIO_PHONE_NUMBER) {
+      console.warn('TWILIO_PHONE_NUMBER not configured - skipping SMS notification');
+      return false;
+    }
 
+    try {
+      const messageResult = await this.twilioClient.messages.create({
+        body: message,
+        from: process.env.TWILIO_PHONE_NUMBER,
+        to: phoneNumber,
+      });
+
+      console.log(`SMS sent successfully to ${phoneNumber}, SID: ${messageResult.sid}`);
       return true;
     } catch (error) {
       console.error('Failed to send SMS:', error);
@@ -46,7 +49,7 @@ export class SmsService {
   }
 
   isConfigured(): boolean {
-    return this.resend !== null;
+    return this.twilioClient !== null && !!process.env.TWILIO_PHONE_NUMBER;
   }
 }
 

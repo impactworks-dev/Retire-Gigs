@@ -123,6 +123,35 @@ export default function Notifications() {
     },
   });
 
+  // Test SMS mutation
+  const testSMSMutation = useMutation({
+    mutationFn: async () => {
+      if (!phoneNumber) {
+        throw new Error("Please enter a phone number first");
+      }
+      const response = await fetch("/api/test-sms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phoneNumber }),
+      });
+      if (!response.ok) throw new Error("Failed to send test SMS");
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({
+        title: "Test SMS Sent",
+        description: `Check your phone at ${phoneNumber} for the test message.`,
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "SMS Test Failed",
+        description: error instanceof Error ? error.message : "There was an issue sending the test SMS.",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Load preferences and user data when available
   useEffect(() => {
     if (preferences) {
@@ -381,16 +410,35 @@ export default function Notifications() {
                 <p className="text-sm text-gray-600 mb-4">
                   Send a test notification to verify your settings are working correctly.
                 </p>
-                <Button
-                  onClick={() => testEmailMutation.mutate()}
-                  variant="outline"
-                  size="sm"
-                  disabled={testEmailMutation.isPending}
-                  className="w-full"
-                  data-testid="button-test-email"
-                >
-                  {testEmailMutation.isPending ? "Sending..." : "Send Test Email to Dante"}
-                </Button>
+                <div className="space-y-3">
+                  <Button
+                    onClick={() => testEmailMutation.mutate()}
+                    variant="outline"
+                    size="sm"
+                    disabled={testEmailMutation.isPending}
+                    className="w-full"
+                    data-testid="button-test-email"
+                  >
+                    {testEmailMutation.isPending ? "Sending..." : "Send Test Email to Dante"}
+                  </Button>
+                  
+                  <Button
+                    onClick={() => testSMSMutation.mutate()}
+                    variant="outline"
+                    size="sm"
+                    disabled={testSMSMutation.isPending || !phoneNumber}
+                    className="w-full"
+                    data-testid="button-test-sms"
+                  >
+                    {testSMSMutation.isPending ? "Sending..." : "Send Test SMS"}
+                  </Button>
+                  
+                  {!phoneNumber && (
+                    <p className="text-xs text-gray-500 text-center">
+                      Enter a phone number above to test SMS
+                    </p>
+                  )}
+                </div>
               </CardContent>
             </Card>
 

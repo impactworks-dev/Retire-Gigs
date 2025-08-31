@@ -400,6 +400,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Test SMS endpoint
+  app.post("/api/test-sms", async (req, res) => {
+    try {
+      const { phoneNumber } = req.body;
+      
+      if (!phoneNumber) {
+        return res.status(400).json({ message: "Phone number is required" });
+      }
+
+      const twilio = (await import('twilio')).default;
+      
+      if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN || !process.env.TWILIO_PHONE_NUMBER) {
+        return res.status(500).json({ message: "Twilio credentials not configured" });
+      }
+
+      const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+
+      const message = await client.messages.create({
+        body: `🎉 SMS Test Successful! This is a test message from Retiree Gigs platform. Your SMS notifications are working properly. Sent at: ${new Date().toLocaleString()}`,
+        from: process.env.TWILIO_PHONE_NUMBER,
+        to: phoneNumber,
+      });
+
+      console.log(`Test SMS sent successfully to ${phoneNumber}, SID: ${message.sid}`);
+      res.json({ 
+        success: true, 
+        message: `Test SMS sent to ${phoneNumber}`,
+        sid: message.sid
+      });
+    } catch (error) {
+      console.error("Error sending test SMS:", error);
+      res.status(500).json({ 
+        message: "Failed to send test SMS", 
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
   // Resume API routes
 
   // Get all resumes for authenticated user
