@@ -16,6 +16,7 @@ import cron from "node-cron";
 import nodemailer from "nodemailer";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { geocodeAddress } from "./geocoding";
+import { ResumeParserService } from "./resumeParser";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
@@ -461,7 +462,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Update resume with uploaded file URL
+  // Update resume with uploaded file URL and parse content
   app.put("/api/resumes/:id/upload", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
@@ -490,14 +491,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
       );
 
-      // Update the resume with the file URL
-      const updatedResume = await storage.updateResume(id, {
+      // Parse the uploaded resume file
+      let parsedData = null;
+      try {
+        console.log("Parsing resume from URL:", req.body.uploadedFileUrl);
+        const resumeParser = new ResumeParserService();
+        parsedData = await resumeParser.parseResumeFromUrl(req.body.uploadedFileUrl);
+        console.log("Resume parsed successfully:", parsedData.title);
+      } catch (parseError) {
+        console.error("Error parsing resume:", parseError);
+        // Continue without parsed data - user can still edit manually
+      }
+
+      // Update the resume with the file URL and parsed data
+      const updateData: any = {
         uploadedFileUrl: objectPath
-      });
+      };
+
+      // If parsing was successful, update with parsed data
+      if (parsedData) {
+        updateData.title = parsedData.title;
+        if (parsedData.summary) updateData.summary = parsedData.summary;
+        if (parsedData.skills.length > 0) updateData.skills = parsedData.skills;
+        if (parsedData.education.length > 0) updateData.education = parsedData.education;
+        if (parsedData.workExperience.length > 0) updateData.workExperience = parsedData.workExperience;
+        if (parsedData.certifications.length > 0) updateData.certifications = parsedData.certifications;
+        if (parsedData.achievements.length > 0) updateData.achievements = parsedData.achievements;
+      }
+
+      const updatedResume = await storage.updateResume(id, updateData);
 
       res.status(200).json({
         objectPath: objectPath,
-        resume: updatedResume
+        resume: updatedResume,
+        parsed: !!parsedData,
+        parsedData: parsedData
       });
     } catch (error) {
       console.error("Error updating resume with uploaded file:", error);

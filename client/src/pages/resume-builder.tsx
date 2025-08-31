@@ -202,16 +202,38 @@ export default function ResumeBuilder() {
 
         console.log("Created resume:", newResume);
 
-        // Set ACL policy for the uploaded file
-        await apiRequest("PUT", `/api/resumes/${newResume.id}/upload`, {
+        // Set ACL policy for the uploaded file and parse content
+        const parseRes = await apiRequest("PUT", `/api/resumes/${newResume.id}/upload`, {
           uploadedFileUrl: uploadURL
         });
+        const parseResult = await parseRes.json();
 
         queryClient.invalidateQueries({ queryKey: ["/api/resumes"] });
-        toast({
-          title: "Success",
-          description: "Resume uploaded successfully!",
-        });
+
+        if (parseResult.parsed && parseResult.parsedData) {
+          // If parsing was successful, switch to edit mode with parsed data
+          setEditingResume(parseResult.resume);
+          form.reset({
+            title: parseResult.parsedData.title || parseResult.resume.title,
+            summary: parseResult.parsedData.summary || "",
+            skills: Array.isArray(parseResult.parsedData.skills) ? parseResult.parsedData.skills : [],
+            education: Array.isArray(parseResult.parsedData.education) ? parseResult.parsedData.education : [],
+            workExperience: Array.isArray(parseResult.parsedData.workExperience) ? parseResult.parsedData.workExperience : [],
+            certifications: Array.isArray(parseResult.parsedData.certifications) ? parseResult.parsedData.certifications : [],
+            achievements: Array.isArray(parseResult.parsedData.achievements) ? parseResult.parsedData.achievements : []
+          });
+          setActiveTab("builder");
+          
+          toast({
+            title: "Resume Parsed Successfully!",
+            description: "Your resume has been uploaded and parsed. You can now edit the extracted information.",
+          });
+        } else {
+          toast({
+            title: "Upload Successful!",
+            description: "Your resume has been uploaded. You can create a new resume manually.",
+          });
+        }
       } catch (error) {
         console.error("Error processing uploaded resume:", error);
         toast({
