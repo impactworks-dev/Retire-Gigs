@@ -14,7 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { ObjectUploader } from "@/components/ObjectUploader";
-import { Plus, Trash2, Upload, FileText, Download, Star } from "lucide-react";
+import { Plus, Trash2, Upload, FileText, Download, Star, Edit3 } from "lucide-react";
 import type { Resume } from "@shared/schema";
 import type { UploadResult } from "@uppy/core";
 
@@ -481,6 +481,18 @@ export default function ResumeBuilder() {
         </TabsContent>
 
         <TabsContent value="builder" className="mt-6">
+          {editingResume && (
+            <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg">
+              <div className="flex items-center gap-2 text-blue-800 dark:text-blue-200">
+                <Edit3 className="w-5 h-5" />
+                <h3 className="font-semibold">Editing Resume: {editingResume.title}</h3>
+              </div>
+              <p className="text-sm text-blue-600 dark:text-blue-300 mt-1">
+                Edit the information below and click "Save Resume" when you're done.
+              </p>
+            </div>
+          )}
+          
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
               <Card>

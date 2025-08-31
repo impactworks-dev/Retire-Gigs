@@ -64,24 +64,46 @@ export class ResumeParserService {
       const file = bucket.file(objectName);
       
       const [buffer] = await file.download();
-      const fileName = objectName.toLowerCase();
+      
+      // Get the actual file metadata to determine content type
+      const [metadata] = await file.getMetadata();
+      const contentType = metadata.contentType || '';
+      console.log('File content type:', contentType);
+      
+      // Determine file type from content type or object name
+      let fileType = '';
+      if (contentType.includes('pdf') || objectName.toLowerCase().includes('.pdf')) {
+        fileType = 'pdf';
+      } else if (contentType.includes('wordprocessingml') || objectName.toLowerCase().includes('.docx')) {
+        fileType = 'docx';
+      } else if (contentType.includes('msword') || objectName.toLowerCase().includes('.doc')) {
+        fileType = 'doc';
+      } else if (contentType.includes('text') || objectName.toLowerCase().includes('.txt')) {
+        fileType = 'txt';
+      } else {
+        // Default to trying text extraction for unknown types
+        fileType = 'unknown';
+      }
 
       let extractedText = '';
 
       // Extract text based on file type
-      if (fileName.endsWith('.docx')) {
+      if (fileType === 'docx') {
         const result = await mammoth.extractRawText({ buffer });
         extractedText = result.value;
-      } else if (fileName.endsWith('.doc')) {
+      } else if (fileType === 'doc') {
         // For .doc files, we'll do basic text extraction
         extractedText = buffer.toString('utf8').replace(/[^\x20-\x7E\n\r]/g, ' ');
-      } else if (fileName.endsWith('.pdf')) {
-        // For PDF files, we'll extract basic text (limited functionality without pdf-parse)
-        // This is a simple fallback - for better PDF parsing, a different approach would be needed
-        const text = buffer.toString('utf8');
+      } else if (fileType === 'pdf') {
+        // For PDF files, we'll extract basic text (limited functionality)
+        const text = buffer.toString('latin1');
         extractedText = text.replace(/[^\x20-\x7E\n\r]/g, ' ').replace(/\s+/g, ' ');
+      } else if (fileType === 'txt') {
+        extractedText = buffer.toString('utf8');
       } else {
-        throw new Error('Unsupported file format');
+        // Try to extract text from unknown file types
+        console.log('Unknown file type, attempting text extraction...');
+        extractedText = buffer.toString('utf8').replace(/[^\x20-\x7E\n\r]/g, ' ').replace(/\s+/g, ' ');
       }
 
       console.log('Extracted text length:', extractedText.length);
