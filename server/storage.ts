@@ -12,12 +12,15 @@ import {
   type InsertSavedJob,
   type Resume,
   type InsertResume,
+  type NewsArticle,
+  type InsertNewsArticle,
   users,
   questionnaireResponses,
   userPreferences,
   jobOpportunities,
   savedJobs,
-  resumes
+  resumes,
+  newsArticles
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, sql } from "drizzle-orm";
@@ -57,6 +60,11 @@ export interface IStorage {
   updateResume(id: string, updates: Partial<InsertResume>): Promise<Resume>;
   deleteResume(id: string): Promise<void>;
   setDefaultResume(userId: string, resumeId: string): Promise<void>;
+
+  // News articles operations
+  getNewsArticles(): Promise<NewsArticle[]>;
+  getNewsArticle(id: string): Promise<NewsArticle | undefined>;
+  createNewsArticle(article: InsertNewsArticle): Promise<NewsArticle>;
 }
 
 export class MemStorage implements IStorage {
@@ -66,6 +74,7 @@ export class MemStorage implements IStorage {
   private jobOpportunities: Map<string, JobOpportunity>;
   private savedJobs: Map<string, SavedJob>;
   private resumes: Map<string, Resume>;
+  private newsArticles: Map<string, NewsArticle>;
 
   constructor() {
     this.users = new Map();
@@ -74,6 +83,7 @@ export class MemStorage implements IStorage {
     this.jobOpportunities = new Map();
     this.savedJobs = new Map();
     this.resumes = new Map();
+    this.newsArticles = new Map();
 
     // Initialize with some sample job opportunities
     this.initializeSampleJobs();
@@ -382,6 +392,31 @@ export class MemStorage implements IStorage {
       throw new Error("Resume not found or access denied");
     }
   }
+
+  async getNewsArticles(): Promise<NewsArticle[]> {
+    return Array.from(this.newsArticles.values())
+      .filter(article => article.isPublished)
+      .sort((a, b) => (b.publishedAt?.getTime() || 0) - (a.publishedAt?.getTime() || 0));
+  }
+
+  async getNewsArticle(id: string): Promise<NewsArticle | undefined> {
+    return this.newsArticles.get(id);
+  }
+
+  async createNewsArticle(insertArticle: InsertNewsArticle): Promise<NewsArticle> {
+    const id = randomUUID();
+    const article: NewsArticle = {
+      ...insertArticle,
+      id,
+      isPublished: insertArticle.isPublished ?? true,
+      imageUrl: insertArticle.imageUrl || null,
+      publishedAt: new Date(),
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    this.newsArticles.set(id, article);
+    return article;
+  }
 }
 
 // Database-backed storage implementation
@@ -591,6 +626,30 @@ export class DatabaseStorage implements IStorage {
     if (!updated) {
       throw new Error("Resume not found or access denied");
     }
+  }
+
+  async getNewsArticles(): Promise<NewsArticle[]> {
+    return await db
+      .select()
+      .from(newsArticles)
+      .where(eq(newsArticles.isPublished, true))
+      .orderBy(sql`${newsArticles.publishedAt} DESC`);
+  }
+
+  async getNewsArticle(id: string): Promise<NewsArticle | undefined> {
+    const [article] = await db
+      .select()
+      .from(newsArticles)
+      .where(eq(newsArticles.id, id));
+    return article || undefined;
+  }
+
+  async createNewsArticle(insertArticle: InsertNewsArticle): Promise<NewsArticle> {
+    const [article] = await db
+      .insert(newsArticles)
+      .values(insertArticle)
+      .returning();
+    return article;
   }
 }
 

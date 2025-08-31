@@ -14,6 +14,8 @@ import Dashboard from "@/pages/dashboard";
 import Profile from "@/pages/profile";
 import { SavedJobs } from "@/pages/saved-jobs";
 import ResumeBuilder from "@/pages/resume-builder";
+import News from "@/pages/news";
+import NewsArticle from "@/pages/news-article";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -36,6 +38,8 @@ function Router() {
           <Route path="/profile" component={Profile} />
           <Route path="/saved-jobs" component={SavedJobs} />
           <Route path="/resume-builder" component={ResumeBuilder} />
+          <Route path="/news" component={News} />
+          <Route path="/news/:id" component={NewsArticle} />
         </>
       )}
       <Route component={NotFound} />

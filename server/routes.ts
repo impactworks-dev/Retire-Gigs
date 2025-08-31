@@ -6,7 +6,8 @@ import {
   insertQuestionnaireResponseSchema,
   insertUserPreferencesSchema,
   insertJobOpportunitySchema,
-  insertResumeSchema
+  insertResumeSchema,
+  insertNewsArticleSchema
 } from "@shared/schema";
 import {
   ObjectStorageService,
@@ -226,6 +227,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(job);
     } catch (error) {
       res.status(400).json({ message: "Invalid job data" });
+    }
+  });
+
+  // News articles routes
+  app.get("/api/news", async (req, res) => {
+    try {
+      const articles = await storage.getNewsArticles();
+      res.json(articles);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to get news articles" });
+    }
+  });
+
+  app.get("/api/news/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const article = await storage.getNewsArticle(id);
+      if (!article) {
+        return res.status(404).json({ message: "Article not found" });
+      }
+      res.json(article);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to get news article" });
+    }
+  });
+
+  app.post("/api/news", async (req, res) => {
+    try {
+      const articleData = insertNewsArticleSchema.parse(req.body);
+      const article = await storage.createNewsArticle(articleData);
+      res.json(article);
+    } catch (error) {
+      res.status(400).json({ message: "Invalid article data" });
     }
   });
 
