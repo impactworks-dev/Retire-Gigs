@@ -2,8 +2,21 @@ import { Resend } from 'resend';
 import type { User, UserPreferences, QuestionnaireResponse, JobOpportunity } from "@shared/schema";
 import { storage } from "./storage";
 
-// Configure Resend
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Configure Resend (lazy initialization)
+let resend: Resend | null = null;
+
+function getResendClient(): Resend | null {
+  if (!process.env.RESEND_API_KEY) {
+    console.warn('RESEND_API_KEY not configured - email notifications will be disabled');
+    return null;
+  }
+  
+  if (!resend) {
+    resend = new Resend(process.env.RESEND_API_KEY);
+  }
+  
+  return resend;
+}
 
 export class JobMatchingService {
   async findMatchingJobsForUser(userId: string): Promise<JobOpportunity[]> {
@@ -105,10 +118,16 @@ export class JobMatchingService {
       return false;
     }
 
+    const resendClient = getResendClient();
+    if (!resendClient) {
+      console.log('Email service not configured - skipping email notification');
+      return false;
+    }
+
     try {
       const emailContent = this.generateEmailContent(user, jobs);
 
-      const sendResult = await resend.emails.send({
+      const sendResult = await resendClient.emails.send({
         from: 'jobs@retireegigs.com',
         to: user.email,
         subject: `${jobs.length} New Job Match${jobs.length > 1 ? 'es' : ''} Found!`,
@@ -130,10 +149,11 @@ export class JobMatchingService {
 
   // Placeholder for sending SMS notifications
   async sendJobNotificationSms(user: User, jobs: JobOpportunity[]): Promise<boolean> {
-    if (!user.phoneNumber || jobs.length === 0) {
+    if (jobs.length === 0) {
       return false;
     }
     // TODO: Implement SMS notification logic using a service like Twilio or Resend's SMS API
+    // Note: Phone number field would need to be added to user schema first
     console.warn(`SMS notification not implemented for user ${user.id}`);
     return false;
   }
