@@ -58,7 +58,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid update data" });
       }
       
-      const user = await storage.upsertUser({ id: userId, ...updates });
+      // Get existing user data first
+      const existingUser = await storage.getUser(userId);
+      if (!existingUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      // For updates, we need to create a partial schema that allows the fields we want to update
+      const allowedUpdateFields = {
+        firstName: updates.firstName,
+        lastName: updates.lastName,
+        email: updates.email,
+        streetAddress: updates.streetAddress,
+        city: updates.city,
+        state: updates.state,
+        zipCode: updates.zipCode,
+        profileImageUrl: updates.profileImageUrl
+      };
+      
+      // Remove undefined fields
+      const filteredUpdates = Object.fromEntries(
+        Object.entries(allowedUpdateFields).filter(([_, value]) => value !== undefined)
+      );
+      
+      console.log("Filtered updates:", filteredUpdates);
+      
+      // Merge with existing user data to ensure all required fields are present
+      const userUpdateData = {
+        ...existingUser,
+        ...filteredUpdates,
+        id: userId,
+        updatedAt: new Date()
+      };
+      
+      const user = await storage.upsertUser(userUpdateData);
       res.json(user);
     } catch (error) {
       console.error("Error updating user profile:", error);
