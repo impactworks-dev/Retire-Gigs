@@ -50,9 +50,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const updates = req.body;
+      console.log("Received update request for user:", userId);
+      console.log("Update data:", updates);
+      
+      // Validate that we have valid data
+      if (!updates || typeof updates !== 'object') {
+        return res.status(400).json({ message: "Invalid update data" });
+      }
+      
       const user = await storage.upsertUser({ id: userId, ...updates });
       res.json(user);
     } catch (error) {
+      console.error("Error updating user profile:", error);
       res.status(400).json({ message: "Failed to update profile" });
     }
   });
