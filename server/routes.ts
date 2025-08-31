@@ -357,7 +357,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const resend = new Resend(process.env.RESEND_API_KEY);
 
       const { data, error } = await resend.emails.send({
-        from: 'Retiree Gigs <noreply@retireegigs.com>',
+        from: 'onboarding@resend.dev',
         to: ['dante@impactworks.com'],
         subject: 'Test Email - Retiree Gigs Platform',
         html: `
