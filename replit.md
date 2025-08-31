@@ -66,6 +66,30 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+### Progressive Web App Implementation (August 31, 2025)
+- Implemented full PWA functionality with installable mobile app capabilities
+- Added service worker for offline functionality and background sync
+- Created app manifest with proper metadata and shortcuts
+- Generated multiple icon sizes for various device requirements
+- Added smart install prompt component with dismissal logic
+- Configured offline page with helpful messaging and cached content access
+- Users can now install the app directly to their mobile home screen for native-like experience
+
+### Saved Jobs Feature (August 31, 2025)
+- Built complete saved jobs functionality with bookmark system
+- Added dedicated saved jobs page with proper data structure
+- Implemented backend API endpoints for saving/unsaving jobs
+- Created bookmark toggle UI with visual feedback (filled/unfilled icons)
+- Added navigation menu item for easy access to saved jobs
+- Integrated proper state management and cache invalidation
+
+### GPS Location and Address Management (August 31, 2025)
+- Implemented GPS location tracking for better job matching
+- Added automatic address geocoding and reverse geocoding
+- Created "Use Current Location" functionality for profile forms
+- Added latitude/longitude database fields for precise location data
+- Enhanced user experience with location-based job recommendations
+
 ### Database Integration (August 26, 2025)
 - Migrated from in-memory storage to PostgreSQL database using Neon
 - Added proper Drizzle ORM relations between users, questionnaire responses, and preferences
