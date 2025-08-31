@@ -164,7 +164,7 @@ export default function News() {
                 {article.imageUrl && (
                   <div className="relative h-48 w-full overflow-hidden rounded-t-lg">
                     <img 
-                      src={`/@assets/generated_images/${article.imageUrl.split('/').pop()}`}
+                      src={article.imageUrl.startsWith('attached_assets/') ? `/${article.imageUrl}` : article.imageUrl}
                       alt={article.title}
                       className="w-full h-full object-cover"
                       data-testid={`article-header-image-${article.id}`}
