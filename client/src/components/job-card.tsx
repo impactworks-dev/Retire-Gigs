@@ -18,10 +18,12 @@ export function JobCard({ job, onViewDetails }: JobCardProps) {
   const queryClient = useQueryClient();
 
   // Check if job is saved
-  const { data: isSaved = false } = useQuery({
+  const { data: savedData } = useQuery({
     queryKey: ["/api/saved-jobs/check", job.id],
     enabled: !!isAuthenticated && !!user?.id,
   });
+  
+  const isSaved = savedData?.isSaved || false;
 
   // Save job mutation
   const saveJobMutation = useMutation({
