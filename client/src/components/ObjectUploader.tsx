@@ -1,10 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useRef } from "react";
 import type { ReactNode } from "react";
-import Uppy from "@uppy/core";
-import { DashboardModal } from "@uppy/react";
-// Note: Uppy styles are loaded via CDN in index.html to avoid bundling issues
-import AwsS3 from "@uppy/aws-s3";
-import type { UploadResult } from "@uppy/core";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 
@@ -15,40 +10,13 @@ interface ObjectUploaderProps {
     method: "PUT";
     url: string;
   }>;
-  onComplete?: (
-    result: UploadResult<Record<string, unknown>, Record<string, unknown>>
-  ) => void;
+  onComplete?: (result: { successful: { uploadURL: string }[] }) => void;
   buttonClassName?: string;
   children: ReactNode;
 }
 
 /**
- * A file upload component that renders as a button and provides a modal interface for
- * file management.
- * 
- * Features:
- * - Renders as a customizable button that opens a file upload modal
- * - Provides a modal interface for:
- *   - File selection
- *   - File preview
- *   - Upload progress tracking
- *   - Upload status display
- * 
- * The component uses Uppy under the hood to handle all file upload functionality.
- * All file management features are automatically handled by the Uppy dashboard modal.
- * 
- * @param props - Component props
- * @param props.maxNumberOfFiles - Maximum number of files allowed to be uploaded
- *   (default: 1)
- * @param props.maxFileSize - Maximum file size in bytes (default: 10MB)
- * @param props.onGetUploadParameters - Function to get upload parameters (method and URL).
- *   Typically used to fetch a presigned URL from the backend server for direct-to-S3
- *   uploads.
- * @param props.onComplete - Callback function called when upload is complete. Typically
- *   used to make post-upload API calls to update server state and set object ACL
- *   policies.
- * @param props.buttonClassName - Optional CSS class name for the button
- * @param props.children - Content to be rendered inside the button
+ * A simple file upload component that handles resume file uploads
  */
 export function ObjectUploader({
   maxNumberOfFiles = 1,
@@ -58,58 +26,114 @@ export function ObjectUploader({
   buttonClassName,
   children,
 }: ObjectUploaderProps) {
-  const [showModal, setShowModal] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const { toast } = useToast();
-  const [uppy] = useState(() =>
-    new Uppy({
-      restrictions: {
-        maxNumberOfFiles,
-        maxFileSize,
-        allowedFileTypes: ['.pdf', '.doc', '.docx'], // Only allow resume file types
-      },
-      autoProceed: false,
-    })
-      .use(AwsS3, {
-        shouldUseMultipart: false,
-        getUploadParameters: onGetUploadParameters,
-      })
-      .on("complete", (result) => {
-        setShowModal(false);
-        onComplete?.(result);
-      })
-      .on("error", (error) => {
-        console.error("Upload error:", error);
-        toast({
-          title: "Upload Error",
-          description: "Failed to upload file. Please try again.",
-          variant: "destructive",
-        });
-      })
-  );
-
-  useEffect(() => {
-    return () => {
-      uppy.destroy();
-    };
-  }, [uppy]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleButtonClick = () => {
     console.log("Upload button clicked!");
-    setShowModal(true);
+    fileInputRef.current?.click();
+  };
+
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) {
+      return;
+    }
+
+    const file = files[0];
+    
+    // Check file size
+    if (file.size > maxFileSize) {
+      toast({
+        title: "File too large",
+        description: `File size must be less than ${Math.round(maxFileSize / 1024 / 1024)}MB`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Check file type
+    const allowedTypes = ['.pdf', '.doc', '.docx'];
+    const fileName = file.name.toLowerCase();
+    const isValidType = allowedTypes.some(type => fileName.endsWith(type));
+    
+    if (!isValidType) {
+      toast({
+        title: "Invalid file type",
+        description: "Only PDF, DOC, and DOCX files are allowed",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsUploading(true);
+
+    try {
+      // Get upload URL
+      console.log("Getting upload parameters...");
+      const uploadParams = await onGetUploadParameters();
+      console.log("Got upload URL:", uploadParams.url);
+
+      // Upload file directly to the URL
+      const response = await fetch(uploadParams.url, {
+        method: uploadParams.method,
+        body: file,
+        headers: {
+          'Content-Type': file.type || 'application/octet-stream',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Upload failed: ${response.status} ${response.statusText}`);
+      }
+
+      console.log("File uploaded successfully!");
+      
+      // Call completion callback
+      onComplete?.({
+        successful: [{ uploadURL: uploadParams.url }]
+      });
+
+      toast({
+        title: "Upload successful",
+        description: "Your file has been uploaded successfully!",
+      });
+
+    } catch (error) {
+      console.error("Upload error:", error);
+      toast({
+        title: "Upload failed",
+        description: "Failed to upload file. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploading(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
   };
 
   return (
     <div>
-      <Button onClick={handleButtonClick} className={buttonClassName} data-testid="button-upload">
-        {children}
-      </Button>
-
-      <DashboardModal
-        uppy={uppy}
-        open={showModal}
-        onRequestClose={() => setShowModal(false)}
-        proudlyDisplayPoweredByUppy={false}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".pdf,.doc,.docx"
+        onChange={handleFileSelect}
+        style={{ display: 'none' }}
+        data-testid="input-file"
       />
+      <Button 
+        onClick={handleButtonClick} 
+        className={buttonClassName}
+        disabled={isUploading}
+        data-testid="button-upload"
+      >
+        {isUploading ? "Uploading..." : children}
+      </Button>
     </div>
   );
 }

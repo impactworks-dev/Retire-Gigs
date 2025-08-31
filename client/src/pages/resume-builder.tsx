@@ -185,7 +185,7 @@ export default function ResumeBuilder() {
     }
   };
 
-  const handleUploadComplete = async (result: UploadResult<Record<string, unknown>, Record<string, unknown>>) => {
+  const handleUploadComplete = async (result: { successful: { uploadURL: string }[] }) => {
     console.log("Upload complete result:", result);
     if (result.successful && result.successful.length > 0) {
       const uploadedFile = result.successful[0];
@@ -397,17 +397,17 @@ export default function ResumeBuilder() {
                         )}
                         {resume.skills && Array.isArray(resume.skills) && resume.skills.length > 0 && (
                           <Badge variant="outline">
-                            {String(resume.skills.length)} Skills
+                            {resume.skills.length} Skills
                           </Badge>
                         )}
                         {resume.workExperience && Array.isArray(resume.workExperience) && resume.workExperience.length > 0 && (
                           <Badge variant="outline">
-                            {String(resume.workExperience.length)} Jobs
+                            {resume.workExperience.length} Jobs
                           </Badge>
                         )}
                         {resume.education && Array.isArray(resume.education) && resume.education.length > 0 && (
                           <Badge variant="outline">
-                            {String(resume.education.length)} Education
+                            {resume.education.length} Education
                           </Badge>
                         )}
                       </div>
