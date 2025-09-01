@@ -7,6 +7,7 @@ import {
   User, 
   Newspaper,
   ArrowRight,
+  ArrowLeft,
   BookmarkCheck
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -76,11 +77,25 @@ export default function SavedNews() {
     <Layout>
       <div className="max-w-6xl mx-auto px-6 py-8">
         {/* Header */}
-        <div className="flex items-center space-x-3 mb-8">
-          <BookmarkCheck className="w-8 h-8 text-blue-600" />
-          <h1 className="text-3xl font-bold text-gray-900" data-testid="page-title-saved-news">
-            Saved Articles
-          </h1>
+        <div className="flex items-center mb-8">
+          <Button
+            variant="ghost"
+            size="sm"
+            asChild
+            className="mr-4"
+            data-testid="button-back-to-dashboard"
+          >
+            <Link href="/">
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Back to Dashboard
+            </Link>
+          </Button>
+          <div className="flex items-center">
+            <BookmarkCheck className="w-6 h-6 text-blue-600 mr-3" />
+            <h1 className="text-3xl font-bold text-gray-900" data-testid="page-title-saved-news">
+              Saved Articles
+            </h1>
+          </div>
         </div>
 
         {/* Stats */}
