@@ -10,6 +10,8 @@ import {
   type InsertJobOpportunity,
   type SavedJob,
   type InsertSavedJob,
+  type SavedNewsArticle,
+  type InsertSavedNewsArticle,
   type Resume,
   type InsertResume,
   type NewsArticle,
@@ -19,6 +21,7 @@ import {
   userPreferences,
   jobOpportunities,
   savedJobs,
+  savedNewsArticles,
   resumes,
   newsArticles
 } from "@shared/schema";
@@ -53,6 +56,12 @@ export interface IStorage {
   getUserSavedJobs(userId: string): Promise<Array<{ id: string; userId: string; jobId: string; savedAt: Date; job: JobOpportunity }>>;
   isJobSaved(userId: string, jobId: string): Promise<boolean>;
 
+  // Saved news articles operations
+  saveNewsArticle(userId: string, articleId: string): Promise<SavedNewsArticle>;
+  unsaveNewsArticle(userId: string, articleId: string): Promise<void>;
+  getUserSavedNewsArticles(userId: string): Promise<Array<{ id: string; userId: string; articleId: string; savedAt: Date; article: NewsArticle }>>;
+  isNewsArticleSaved(userId: string, articleId: string): Promise<boolean>;
+
   // Resume operations
   createResume(resume: InsertResume): Promise<Resume>;
   getResume(id: string): Promise<Resume | undefined>;
@@ -73,6 +82,7 @@ export class MemStorage implements IStorage {
   private userPreferences: Map<string, UserPreferences>;
   private jobOpportunities: Map<string, JobOpportunity>;
   private savedJobs: Map<string, SavedJob>;
+  private savedNewsArticles: Map<string, SavedNewsArticle>;
   private resumes: Map<string, Resume>;
   private newsArticles: Map<string, NewsArticle>;
 
@@ -82,6 +92,7 @@ export class MemStorage implements IStorage {
     this.userPreferences = new Map();
     this.jobOpportunities = new Map();
     this.savedJobs = new Map();
+    this.savedNewsArticles = new Map();
     this.resumes = new Map();
     this.newsArticles = new Map();
 
@@ -328,6 +339,53 @@ export class MemStorage implements IStorage {
       .some(savedJob => savedJob.userId === userId && savedJob.jobId === jobId);
   }
 
+  async saveNewsArticle(userId: string, articleId: string): Promise<SavedNewsArticle> {
+    const id = randomUUID();
+    const savedArticle: SavedNewsArticle = {
+      id,
+      userId,
+      articleId,
+      savedAt: new Date()
+    };
+    this.savedNewsArticles.set(id, savedArticle);
+    return savedArticle;
+  }
+
+  async unsaveNewsArticle(userId: string, articleId: string): Promise<void> {
+    const entries = Array.from(this.savedNewsArticles.entries());
+    for (const [id, savedArticle] of entries) {
+      if (savedArticle.userId === userId && savedArticle.articleId === articleId) {
+        this.savedNewsArticles.delete(id);
+        return;
+      }
+    }
+  }
+
+  async getUserSavedNewsArticles(userId: string): Promise<Array<{ id: string; userId: string; articleId: string; savedAt: Date; article: NewsArticle }>> {
+    const userSavedArticles = Array.from(this.savedNewsArticles.values())
+      .filter(savedArticle => savedArticle.userId === userId);
+
+    const result: Array<{ id: string; userId: string; articleId: string; savedAt: Date; article: NewsArticle }> = [];
+    for (const savedArticle of userSavedArticles) {
+      const article = this.newsArticles.get(savedArticle.articleId);
+      if (article && article.isPublished) {
+        result.push({
+          id: savedArticle.id,
+          userId: savedArticle.userId,
+          articleId: savedArticle.articleId,
+          savedAt: savedArticle.savedAt || new Date(),
+          article: article
+        });
+      }
+    }
+    return result;
+  }
+
+  async isNewsArticleSaved(userId: string, articleId: string): Promise<boolean> {
+    return Array.from(this.savedNewsArticles.values())
+      .some(savedArticle => savedArticle.userId === userId && savedArticle.articleId === articleId);
+  }
+
   async createResume(insertResume: InsertResume): Promise<Resume> {
     const id = randomUUID();
     const resume: Resume = {
@@ -566,6 +624,57 @@ export class DatabaseStorage implements IStorage {
       .select({ count: sql`1` })
       .from(savedJobs)
       .where(and(eq(savedJobs.userId, userId), eq(savedJobs.jobId, jobId)))
+      .limit(1);
+
+    return !!result;
+  }
+
+  async saveNewsArticle(userId: string, articleId: string): Promise<SavedNewsArticle> {
+    const [savedArticle] = await db
+      .insert(savedNewsArticles)
+      .values({ userId, articleId })
+      .onConflictDoNothing()
+      .returning();
+
+    // If no savedArticle was returned due to conflict, fetch the existing one
+    if (!savedArticle) {
+      const [existing] = await db
+        .select()
+        .from(savedNewsArticles)
+        .where(and(eq(savedNewsArticles.userId, userId), eq(savedNewsArticles.articleId, articleId)));
+      return existing;
+    }
+
+    return savedArticle;
+  }
+
+  async unsaveNewsArticle(userId: string, articleId: string): Promise<void> {
+    await db
+      .delete(savedNewsArticles)
+      .where(and(eq(savedNewsArticles.userId, userId), eq(savedNewsArticles.articleId, articleId)));
+  }
+
+  async getUserSavedNewsArticles(userId: string): Promise<Array<{ id: string; userId: string; articleId: string; savedAt: Date; article: NewsArticle }>> {
+    const results = await db
+      .select()
+      .from(savedNewsArticles)
+      .innerJoin(newsArticles, eq(savedNewsArticles.articleId, newsArticles.id))
+      .where(and(eq(savedNewsArticles.userId, userId), eq(newsArticles.isPublished, true)));
+
+    return results.map(result => ({
+      id: result.saved_news_articles.id,
+      userId: result.saved_news_articles.userId,
+      articleId: result.saved_news_articles.articleId,
+      savedAt: result.saved_news_articles.savedAt || new Date(),
+      article: result.news_articles
+    }));
+  }
+
+  async isNewsArticleSaved(userId: string, articleId: string): Promise<boolean> {
+    const [result] = await db
+      .select({ count: sql`1` })
+      .from(savedNewsArticles)
+      .where(and(eq(savedNewsArticles.userId, userId), eq(savedNewsArticles.articleId, articleId)))
       .limit(1);
 
     return !!result;

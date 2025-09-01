@@ -12,6 +12,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "wouter";
 import type { NewsArticle } from "@shared/schema";
 import { format } from "date-fns";
+import NewsBookmarkButton from "@/components/news-bookmark-button";
 
 export default function NewsArticlePage() {
   const { id } = useParams<{ id: string }>();
@@ -116,9 +117,12 @@ export default function NewsArticlePage() {
                   {article.title}
                 </h1>
                 
-                <div className="flex items-center text-gray-600">
-                  <User className="w-4 h-4 mr-1" />
-                  <span className="font-medium">By {article.author}</span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center text-gray-600">
+                    <User className="w-4 h-4 mr-1" />
+                    <span className="font-medium">By {article.author}</span>
+                  </div>
+                  <NewsBookmarkButton articleId={article.id} />
                 </div>
               </div>
             </CardHeader>

@@ -319,6 +319,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Saved news articles endpoints
+  app.post("/api/saved-news", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { articleId } = req.body;
+
+      if (!articleId) {
+        return res.status(400).json({ message: "Article ID is required" });
+      }
+
+      const savedArticle = await storage.saveNewsArticle(userId, articleId);
+      res.json(savedArticle);
+    } catch (error) {
+      console.error("Error saving news article:", error);
+      res.status(500).json({ message: "Failed to save news article" });
+    }
+  });
+
+  app.delete("/api/saved-news/:articleId", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { articleId } = req.params;
+
+      await storage.unsaveNewsArticle(userId, articleId);
+      res.json({ message: "News article unsaved successfully" });
+    } catch (error) {
+      console.error("Error unsaving news article:", error);
+      res.status(500).json({ message: "Failed to unsave news article" });
+    }
+  });
+
+  app.get("/api/saved-news", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const savedArticles = await storage.getUserSavedNewsArticles(userId);
+      res.json(savedArticles);
+    } catch (error) {
+      console.error("Error fetching saved news articles:", error);
+      res.status(500).json({ message: "Failed to fetch saved news articles" });
+    }
+  });
+
+  app.get("/api/saved-news/check/:articleId", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { articleId } = req.params;
+
+      const isSaved = await storage.isNewsArticleSaved(userId, articleId);
+      res.json({ isSaved });
+    } catch (error) {
+      console.error("Error checking if news article is saved:", error);
+      res.status(500).json({ message: "Failed to check saved status" });
+    }
+  });
+
   // Email notification endpoint
   app.post("/api/send-notification", async (req, res) => {
     try {
@@ -659,8 +714,176 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Middleware for Lindy AI authentication
+  const authenticateLindy = (req: any, res: any, next: any) => {
+    const apiKey = req.headers['x-api-key'] || req.headers['authorization']?.replace('Bearer ', '');
+    
+    if (!apiKey || apiKey !== process.env.LINDY_API_KEY) {
+      return res.status(401).json({ message: "Unauthorized - Invalid API key" });
+    }
+    next();
+  };
+
+  // Lindy AI: Get user preferences for job matching
+  app.get("/api/lindy/user-preferences/:userId", authenticateLindy, async (req, res) => {
+    try {
+      const { userId } = req.params;
+      
+      // Get user preferences
+      const preferences = await storage.getUserPreferences(userId);
+      if (!preferences) {
+        return res.status(404).json({ message: "User preferences not found" });
+      }
+
+      // Get user basic info
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Structure data for Lindy AI
+      const userData = {
+        userId: user.id,
+        email: user.email,
+        age: user.age,
+        phoneNumber: user.phoneNumber,
+        streetAddress: user.streetAddress,
+        city: user.city,
+        state: user.state,
+        zipCode: user.zipCode,
+        latitude: user.latitude,
+        longitude: user.longitude,
+        preferences: {
+          schedulePreference: preferences.schedulePreference,
+          preferredJobTypes: preferences.preferredJobTypes,
+          preferredLocations: preferences.preferredLocations,
+          notificationsEnabled: preferences.notificationsEnabled,
+          smsNotificationsEnabled: preferences.smsNotificationsEnabled
+        }
+      };
+
+      res.json(userData);
+    } catch (error) {
+      console.error("Error fetching user preferences for Lindy:", error);
+      res.status(500).json({ message: "Failed to fetch user preferences" });
+    }
+  });
+
+  // Lindy AI: Trigger job search for specific user
+  app.post("/api/lindy/trigger-job-search", authenticateLindy, async (req, res) => {
+    try {
+      const { userId, searchContext } = req.body;
+      
+      if (!userId) {
+        return res.status(400).json({ message: "userId is required" });
+      }
+
+      // Get user preferences to provide context
+      const preferences = await storage.getUserPreferences(userId);
+      const user = await storage.getUser(userId);
+      
+      if (!preferences || !user) {
+        return res.status(404).json({ message: "User or preferences not found" });
+      }
+
+      // Log the trigger for monitoring
+      console.log(`Lindy job search triggered for user ${userId}`, {
+        searchContext,
+        preferredJobTypes: preferences.preferredJobTypes,
+        preferredLocations: preferences.preferredLocations
+      });
+
+      // Return user context for Lindy to use in job search
+      res.json({
+        success: true,
+        userContext: {
+          userId: user.id,
+          age: user.age,
+          location: `${user.streetAddress || ''} ${user.city || ''} ${user.state || ''} ${user.zipCode || ''}`.trim(),
+          preferredJobTypes: preferences.preferredJobTypes,
+          preferredLocations: preferences.preferredLocations,
+          schedulePreference: preferences.schedulePreference
+        },
+        message: "Job search triggered successfully"
+      });
+    } catch (error) {
+      console.error("Error triggering Lindy job search:", error);
+      res.status(500).json({ message: "Failed to trigger job search" });
+    }
+  });
+
+  // Endpoint to trigger Lindy job search via webhook (calls Lindy's webhook)
+  app.post("/api/trigger-lindy-search", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { searchContext } = req.body;
+
+      // Get user preferences to send to Lindy
+      const preferences = await storage.getUserPreferences(userId);
+      const user = await storage.getUser(userId);
+      
+      if (!preferences || !user) {
+        return res.status(404).json({ message: "User or preferences not found" });
+      }
+
+      // Prepare data to send to Lindy webhook
+      const lindyPayload = {
+        userId: user.id,
+        userProfile: {
+          age: user.age,
+          location: `${user.streetAddress || ''} ${user.city || ''} ${user.state || ''} ${user.zipCode || ''}`.trim(),
+          latitude: user.latitude,
+          longitude: user.longitude,
+          email: user.email
+        },
+        preferences: {
+          schedulePreference: preferences.schedulePreference,
+          preferredJobTypes: preferences.preferredJobTypes,
+          preferredLocations: preferences.preferredLocations
+        },
+        searchContext: searchContext || "Regular job search based on user preferences",
+        timestamp: new Date().toISOString()
+      };
+
+      // Send webhook to Lindy (if webhook URL is configured)
+      if (process.env.LINDY_WEBHOOK_URL) {
+        const response = await fetch(process.env.LINDY_WEBHOOK_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${process.env.LINDY_API_KEY}`
+          },
+          body: JSON.stringify(lindyPayload)
+        });
+
+        if (!response.ok) {
+          console.error('Failed to trigger Lindy webhook:', response.status, response.statusText);
+          return res.status(500).json({ message: "Failed to trigger Lindy job search" });
+        }
+
+        console.log(`Lindy job search triggered for user ${userId}`);
+        res.json({ 
+          success: true, 
+          message: "Lindy job search triggered successfully",
+          triggeredAt: new Date().toISOString()
+        });
+      } else {
+        // If no Lindy webhook URL configured, just log the request
+        console.log('Lindy webhook URL not configured. Job search request:', lindyPayload);
+        res.json({ 
+          success: true, 
+          message: "Job search request logged (Lindy webhook URL not configured)",
+          payload: lindyPayload
+        });
+      }
+    } catch (error) {
+      console.error("Error triggering Lindy job search:", error);
+      res.status(500).json({ message: "Failed to trigger Lindy job search" });
+    }
+  });
+
   // Lindy AI webhook endpoint for receiving new job opportunities
-  app.post("/api/lindy-webhook", async (req, res) => {
+  app.post("/api/lindy-webhook", authenticateLindy, async (req, res) => {
     try {
       const jobData = req.body;
       // Process and validate job data from Lindy AI

@@ -17,6 +17,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
 import type { NewsArticle } from "@shared/schema";
 import { format } from "date-fns";
+import NewsBookmarkButton from "@/components/news-bookmark-button";
 
 export default function News() {
   // Filter states
@@ -197,12 +198,15 @@ export default function News() {
                   <p className="text-gray-600 mb-4 leading-relaxed">
                     {article.excerpt}
                   </p>
-                  <Link href={`/news/${article.id}`}>
-                    <Button variant="outline" className="group" data-testid={`button-read-article-${article.id}`}>
-                      Read Full Article
-                      <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
-                    </Button>
-                  </Link>
+                  <div className="flex items-center justify-between">
+                    <Link href={`/news/${article.id}`}>
+                      <Button variant="outline" className="group" data-testid={`button-read-article-${article.id}`}>
+                        Read Full Article
+                        <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
+                      </Button>
+                    </Link>
+                    <NewsBookmarkButton articleId={article.id} />
+                  </div>
                 </CardContent>
               </Card>
             ))

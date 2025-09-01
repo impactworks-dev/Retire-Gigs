@@ -72,6 +72,13 @@ export const savedJobs = pgTable("saved_jobs", {
   savedAt: timestamp("saved_at").defaultNow(),
 });
 
+export const savedNewsArticles = pgTable("saved_news_articles", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  articleId: varchar("article_id").references(() => newsArticles.id).notNull(),
+  savedAt: timestamp("saved_at").defaultNow(),
+});
+
 export const resumes = pgTable("resumes", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").references(() => users.id).notNull(),
@@ -107,6 +114,7 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   questionnaireResponses: many(questionnaireResponses),
   userPreferences: one(userPreferences),
   savedJobs: many(savedJobs),
+  savedNewsArticles: many(savedNewsArticles),
   resumes: many(resumes),
 }));
 
@@ -146,6 +154,21 @@ export const resumesRelations = relations(resumes, ({ one }) => ({
   }),
 }));
 
+export const newsArticlesRelations = relations(newsArticles, ({ many }) => ({
+  savedByUsers: many(savedNewsArticles),
+}));
+
+export const savedNewsArticlesRelations = relations(savedNewsArticles, ({ one }) => ({
+  user: one(users, {
+    fields: [savedNewsArticles.userId],
+    references: [users.id],
+  }),
+  article: one(newsArticles, {
+    fields: [savedNewsArticles.articleId],
+    references: [newsArticles.id],
+  }),
+}));
+
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   createdAt: true,
@@ -167,6 +190,11 @@ export const insertJobOpportunitySchema = createInsertSchema(jobOpportunities).o
 });
 
 export const insertSavedJobSchema = createInsertSchema(savedJobs).omit({
+  id: true,
+  savedAt: true,
+});
+
+export const insertSavedNewsArticleSchema = createInsertSchema(savedNewsArticles).omit({
   id: true,
   savedAt: true,
 });
@@ -199,3 +227,5 @@ export type Resume = typeof resumes.$inferSelect;
 export type InsertResume = z.infer<typeof insertResumeSchema>;
 export type NewsArticle = typeof newsArticles.$inferSelect;
 export type InsertNewsArticle = z.infer<typeof insertNewsArticleSchema>;
+export type SavedNewsArticle = typeof savedNewsArticles.$inferSelect;
+export type InsertSavedNewsArticle = z.infer<typeof insertSavedNewsArticleSchema>;

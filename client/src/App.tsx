@@ -13,6 +13,7 @@ import RetakeAssessment from "@/pages/retake-assessment";
 import Dashboard from "@/pages/dashboard";
 import Profile from "@/pages/profile";
 import { SavedJobs } from "@/pages/saved-jobs";
+import SavedNews from "@/pages/saved-news";
 import ResumeBuilder from "@/pages/resume-builder";
 import News from "@/pages/news";
 import NewsArticle from "@/pages/news-article";
@@ -38,6 +39,7 @@ function Router() {
           <Route path="/dashboard" component={Dashboard} />
           <Route path="/profile" component={Profile} />
           <Route path="/saved-jobs" component={SavedJobs} />
+          <Route path="/saved-news" component={SavedNews} />
           <Route path="/resumes" component={ResumeBuilder} />
           <Route path="/notifications" component={Notifications} />
           <Route path="/news" component={News} />

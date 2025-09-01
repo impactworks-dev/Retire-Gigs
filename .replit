@@ -85,6 +85,7 @@ task = "shell.exec"
 args = "echo \"Job notification process completed!\""
 
 [agent]
+integrations = ["javascript_database==1.0.0"]
 
 [objectStorage]
 defaultBucketID = "replit-objstore-5d15e829-8ca1-4d51-a215-0377c638b2c7"
