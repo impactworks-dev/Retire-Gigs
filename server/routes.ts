@@ -15,7 +15,7 @@ import {
 } from "./objectStorage";
 import cron from "node-cron";
 import nodemailer from "nodemailer";
-import { setupAuth, isAuthenticated } from "./replitAuth";
+import { setupAuth, isAuthenticated, isAdmin } from "./replitAuth";
 import { geocodeAddress } from "./geocoding";
 import { ResumeParserService } from "./resumeParser";
 import { jobMatchingService } from "./jobMatchingService";
@@ -134,20 +134,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Save questionnaire responses
-  app.post("/api/questionnaire", async (req, res) => {
+  app.post("/api/questionnaire", isAuthenticated, async (req: any, res) => {
     try {
-      const responseData = insertQuestionnaireResponseSchema.parse(req.body);
+      const userId = req.user.claims.sub;
+      
+      // SECURITY: Prevent user binding attacks - only allow authenticated user to submit for themselves
+      const requestData = req.body;
+      if (requestData.userId && requestData.userId !== userId) {
+        return res.status(403).json({ message: "Cannot submit questionnaire for another user" });
+      }
+      
+      // Check if user already has a questionnaire response to prevent duplicate submissions
+      const existingResponse = await storage.getQuestionnaireResponse(userId);
+      if (existingResponse) {
+        return res.status(409).json({ message: "Questionnaire already completed. Use update endpoint to modify." });
+      }
+      
+      // Force the userId to be the authenticated user's ID
+      const responseData = insertQuestionnaireResponseSchema.parse({
+        ...requestData,
+        userId: userId
+      });
+      
       const response = await storage.saveQuestionnaireResponse(responseData);
       res.json(response);
     } catch (error) {
+      console.error("Error saving questionnaire:", error);
       res.status(400).json({ message: "Invalid questionnaire data" });
     }
   });
 
   // Get questionnaire responses for a user
-  app.get("/api/questionnaire/:userId", async (req, res) => {
+  app.get("/api/questionnaire/:userId", isAuthenticated, async (req: any, res) => {
     try {
       const { userId } = req.params;
+      const authenticatedUserId = req.user.claims.sub;
+
+      // Users can only access their own questionnaire responses
+      if (userId !== authenticatedUserId) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+
       const response = await storage.getQuestionnaireResponse(userId);
       res.json(response);
     } catch (error) {
@@ -156,9 +183,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Check if user has completed questionnaire
-  app.get("/api/questionnaire/status/:userId", async (req, res) => {
+  app.get("/api/questionnaire/status/:userId", isAuthenticated, async (req: any, res) => {
     try {
       const { userId } = req.params;
+      const authenticatedUserId = req.user.claims.sub;
+
+      // Users can only check their own questionnaire status
+      if (userId !== authenticatedUserId) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+
       const response = await storage.getQuestionnaireResponse(userId);
       res.json({ completed: !!response });
     } catch (error) {
@@ -167,9 +201,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Save user preferences
-  app.post("/api/preferences", async (req, res) => {
+  app.post("/api/preferences", isAuthenticated, async (req: any, res) => {
     try {
-      const preferencesData = insertUserPreferencesSchema.parse(req.body);
+      const userId = req.user.claims.sub;
+      const preferencesData = insertUserPreferencesSchema.parse({
+        ...req.body,
+        userId
+      });
       const preferences = await storage.saveUserPreferences(preferencesData);
       res.json(preferences);
     } catch (error) {
@@ -178,9 +216,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Update user preferences
-  app.patch("/api/preferences/:userId", async (req, res) => {
+  app.patch("/api/preferences/:userId", isAuthenticated, async (req: any, res) => {
     try {
       const { userId } = req.params;
+      const authenticatedUserId = req.user.claims.sub;
+
+      // Users can only update their own preferences
+      if (userId !== authenticatedUserId) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+
       const preferences = await storage.updateUserPreferences(userId, req.body);
       res.json(preferences);
     } catch (error) {
@@ -189,9 +234,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get user preferences
-  app.get("/api/preferences/:userId", async (req, res) => {
+  app.get("/api/preferences/:userId", isAuthenticated, async (req: any, res) => {
     try {
       const { userId } = req.params;
+      const authenticatedUserId = req.user.claims.sub;
+
+      // Users can only access their own preferences
+      if (userId !== authenticatedUserId) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+
       const preferences = await storage.getUserPreferences(userId);
       res.json(preferences);
     } catch (error) {
@@ -210,9 +262,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get matching jobs for a user
-  app.get("/api/jobs/matches/:userId", async (req, res) => {
+  app.get("/api/jobs/matches/:userId", isAuthenticated, async (req: any, res) => {
     try {
       const { userId } = req.params;
+      const authenticatedUserId = req.user.claims.sub;
+
+      // Users can only access their own job matches
+      if (userId !== authenticatedUserId) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+
       const jobs = await storage.getMatchingJobs(userId);
       res.json(jobs);
     } catch (error) {
@@ -220,8 +279,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Create job opportunity (for Lindy AI integration)
-  app.post("/api/jobs", async (req, res) => {
+  // Create job opportunity (requires admin access)
+  app.post("/api/jobs", isAuthenticated, isAdmin, async (req: any, res) => {
     try {
       const jobData = insertJobOpportunitySchema.parse(req.body);
       const job = await storage.createJobOpportunity(jobData);
@@ -254,7 +313,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/news", async (req, res) => {
+  app.post("/api/news", isAuthenticated, isAdmin, async (req: any, res) => {
     try {
       const articleData = insertNewsArticleSchema.parse(req.body);
       const article = await storage.createNewsArticle(articleData);
@@ -375,7 +434,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Email notification endpoint
-  app.post("/api/send-notification", async (req, res) => {
+  app.post("/api/send-notification", isAuthenticated, isAdmin, async (req: any, res) => {
     try {
       const { email, subject, content } = req.body;
 
@@ -402,7 +461,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Test email endpoint
-  app.post("/api/test-email", async (req, res) => {
+  app.post("/api/test-email", isAuthenticated, isAdmin, async (req: any, res) => {
     try {
       if (!process.env.RESEND_API_KEY) {
         return res.status(500).json({ message: "RESEND_API_KEY not configured" });
@@ -456,7 +515,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Test SMS endpoint
-  app.post("/api/test-sms", async (req, res) => {
+  app.post("/api/test-sms", isAuthenticated, isAdmin, async (req: any, res) => {
     try {
       const { phoneNumber } = req.body;
       
@@ -651,6 +710,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (!req.body.uploadedFileUrl) {
         return res.status(400).json({ error: "uploadedFileUrl is required" });
+      }
+
+      // SECURITY: Validate uploadedFileUrl to prevent SSRF attacks
+      const uploadedFileUrl = req.body.uploadedFileUrl;
+      try {
+        const url = new URL(uploadedFileUrl);
+        // Only allow URLs from trusted object storage domains
+        const allowedHosts = [
+          'storage.googleapis.com',
+          'objects.replit.com',
+          // Add any other trusted object storage domains your app uses
+        ];
+        
+        if (!allowedHosts.some(host => url.hostname === host || url.hostname.endsWith('.' + host))) {
+          return res.status(400).json({ error: "Invalid file URL - only object storage URLs are allowed" });
+        }
+      } catch (urlError) {
+        return res.status(400).json({ error: "Invalid URL format" });
       }
 
       // Check if resume exists and belongs to user
@@ -918,8 +995,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Test endpoint for job notifications (no auth required for testing)
-  app.post("/api/test-notifications", async (req, res) => {
+  // Test endpoint for job notifications (requires authentication)
+  app.post("/api/test-notifications", isAuthenticated, async (req: any, res) => {
     try {
       await jobMatchingService.processAllUserNotifications();
       res.json({ success: true, message: "Test job notifications processed" });

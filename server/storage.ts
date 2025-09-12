@@ -178,6 +178,7 @@ export class MemStorage implements IStorage {
       zipCode: null,
       latitude: null,
       longitude: null,
+      phoneNumber: insertUser.phoneNumber || null,
       profileImageUrl: null,
       createdAt: new Date(),
       updatedAt: new Date()
@@ -208,6 +209,7 @@ export class MemStorage implements IStorage {
       zipCode: userData.zipCode || null,
       latitude: userData.latitude || null,
       longitude: userData.longitude || null,
+      phoneNumber: userData.phoneNumber || null,
       profileImageUrl: userData.profileImageUrl || null,
       createdAt: existingUser?.createdAt || new Date(),
       updatedAt: new Date()
@@ -240,6 +242,7 @@ export class MemStorage implements IStorage {
       id,
       updatedAt: new Date(),
       notificationsEnabled: preferences.notificationsEnabled ?? true,
+      smsNotificationsEnabled: preferences.smsNotificationsEnabled ?? false,
       schedulePreference: preferences.schedulePreference || "weekly",
       preferredJobTypes: preferences.preferredJobTypes || null,
       preferredLocations: preferences.preferredLocations || null

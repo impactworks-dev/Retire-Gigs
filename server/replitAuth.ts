@@ -156,3 +156,24 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
     return;
   }
 };
+
+// Admin authorization middleware
+export const isAdmin: RequestHandler = async (req, res, next) => {
+  const user = req.user as any;
+  
+  if (!req.isAuthenticated() || !user.claims?.sub) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  const userId = user.claims.sub;
+  
+  // Get admin user IDs from environment variable or use default fallback
+  const adminIds = process.env.ADMIN_USER_IDS?.split(',').map(id => id.trim()) || [];
+  
+  // Check if user is in admin list
+  if (!adminIds.includes(userId)) {
+    return res.status(403).json({ message: "Admin access required" });
+  }
+
+  return next();
+};
