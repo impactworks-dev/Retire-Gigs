@@ -437,21 +437,30 @@ export default function ResumeBuilder() {
                         {resume.uploadedFileUrl && (
                           <Badge variant="outline">Uploaded File</Badge>
                         )}
-                        {resume.skills && Array.isArray(resume.skills) && resume.skills.length > 0 && (
-                          <Badge variant="outline">
-                            {resume.skills.length} Skills
-                          </Badge>
-                        )}
-                        {resume.workExperience && Array.isArray(resume.workExperience) && resume.workExperience.length > 0 && (
-                          <Badge variant="outline">
-                            {resume.workExperience.length} Jobs
-                          </Badge>
-                        )}
-                        {resume.education && Array.isArray(resume.education) && resume.education.length > 0 && (
-                          <Badge variant="outline">
-                            {resume.education.length} Education
-                          </Badge>
-                        )}
+                        {(() => {
+                          const skills = resume.skills as string[] | undefined;
+                          return skills && Array.isArray(skills) && skills.length > 0 && (
+                            <Badge variant="outline">
+                              {skills.length} Skills
+                            </Badge>
+                          );
+                        })()}
+                        {(() => {
+                          const workExperience = resume.workExperience as any[] | undefined;
+                          return workExperience && Array.isArray(workExperience) && workExperience.length > 0 && (
+                            <Badge variant="outline">
+                              {workExperience.length} Jobs
+                            </Badge>
+                          );
+                        })()}
+                        {(() => {
+                          const education = resume.education as any[] | undefined;
+                          return education && Array.isArray(education) && education.length > 0 && (
+                            <Badge variant="outline">
+                              {education.length} Education
+                            </Badge>
+                          );
+                        })()}
                       </div>
                       <div className="mt-3 text-sm text-gray-500">
                         Created: {new Date(resume.createdAt || "").toLocaleDateString()}

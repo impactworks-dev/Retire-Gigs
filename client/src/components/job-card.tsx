@@ -12,13 +12,17 @@ interface JobCardProps {
   onViewDetails: (jobId: string) => void;
 }
 
+interface SavedJobCheckResponse {
+  isSaved: boolean;
+}
+
 export function JobCard({ job, onViewDetails }: JobCardProps) {
   const { user, isAuthenticated } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   // Check if job is saved
-  const { data: savedData } = useQuery({
+  const { data: savedData } = useQuery<SavedJobCheckResponse>({
     queryKey: ["/api/saved-jobs/check", job.id],
     enabled: !!isAuthenticated && !!user?.id,
   });
