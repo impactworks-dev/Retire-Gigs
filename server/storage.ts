@@ -29,6 +29,32 @@ import { db } from "./db";
 import { eq, and, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
+// Rate limiting for expensive operations
+class RateLimiter {
+  private operations: Map<string, number[]> = new Map();
+  private readonly maxOperations = 10; // Max operations per window
+  private readonly windowMs = 60000; // 1 minute window
+
+  isAllowed(userId: string, operationType: string): boolean {
+    const key = `${userId}:${operationType}`;
+    const now = Date.now();
+    const operations = this.operations.get(key) || [];
+    
+    // Remove operations outside the window
+    const validOperations = operations.filter(time => now - time < this.windowMs);
+    
+    if (validOperations.length >= this.maxOperations) {
+      return false;
+    }
+    
+    validOperations.push(now);
+    this.operations.set(key, validOperations);
+    return true;
+  }
+}
+
+const rateLimiter = new RateLimiter();
+
 export interface IStorage {
   // User operations
   createUser(user: InsertUser): Promise<User>;
@@ -49,6 +75,8 @@ export interface IStorage {
   getJobOpportunities(): Promise<JobOpportunity[]>;
   getMatchingJobs(userId: string): Promise<JobOpportunity[]>;
   createJobOpportunity(job: InsertJobOpportunity): Promise<JobOpportunity>;
+  updateJobOpportunity(id: string, updates: Partial<InsertJobOpportunity>): Promise<JobOpportunity>;
+  deleteJobOpportunity(id: string): Promise<void>;
 
   // Saved jobs operations
   saveJob(userId: string, jobId: string): Promise<SavedJob>;
@@ -74,6 +102,8 @@ export interface IStorage {
   getNewsArticles(): Promise<NewsArticle[]>;
   getNewsArticle(id: string): Promise<NewsArticle | undefined>;
   createNewsArticle(article: InsertNewsArticle): Promise<NewsArticle>;
+  updateNewsArticle(id: string, updates: Partial<InsertNewsArticle>): Promise<NewsArticle>;
+  deleteNewsArticle(id: string): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
@@ -295,6 +325,36 @@ export class MemStorage implements IStorage {
     return jobOpportunity;
   }
 
+  async updateJobOpportunity(id: string, updates: Partial<InsertJobOpportunity>): Promise<JobOpportunity> {
+    const existing = this.jobOpportunities.get(id);
+    if (!existing) {
+      throw new Error("Job opportunity not found");
+    }
+
+    const updated: JobOpportunity = {
+      ...existing,
+      ...updates,
+      id,
+      createdAt: existing.createdAt
+    };
+    this.jobOpportunities.set(id, updated);
+    return updated;
+  }
+
+  async deleteJobOpportunity(id: string): Promise<void> {
+    const existing = this.jobOpportunities.get(id);
+    if (!existing) {
+      throw new Error("Job opportunity not found");
+    }
+
+    // Soft delete by setting isActive to false
+    const updated: JobOpportunity = {
+      ...existing,
+      isActive: false
+    };
+    this.jobOpportunities.set(id, updated);
+  }
+
   async saveJob(userId: string, jobId: string): Promise<SavedJob> {
     const id = randomUUID();
     const savedJob: SavedJob = {
@@ -478,25 +538,69 @@ export class MemStorage implements IStorage {
     this.newsArticles.set(id, article);
     return article;
   }
+
+  async updateNewsArticle(id: string, updates: Partial<InsertNewsArticle>): Promise<NewsArticle> {
+    const existing = this.newsArticles.get(id);
+    if (!existing) {
+      throw new Error("News article not found");
+    }
+
+    const updated: NewsArticle = {
+      ...existing,
+      ...updates,
+      id,
+      createdAt: existing.createdAt,
+      updatedAt: new Date()
+    };
+    this.newsArticles.set(id, updated);
+    return updated;
+  }
+
+  async deleteNewsArticle(id: string): Promise<void> {
+    const existing = this.newsArticles.get(id);
+    if (!existing) {
+      throw new Error("News article not found");
+    }
+
+    // Soft delete by setting isPublished to false
+    const updated: NewsArticle = {
+      ...existing,
+      isPublished: false,
+      updatedAt: new Date()
+    };
+    this.newsArticles.set(id, updated);
+  }
 }
 
 // Database-backed storage implementation
 export class DatabaseStorage implements IStorage {
   async createUser(insertUser: InsertUser): Promise<User> {
-    const [user] = await db
-      .insert(users)
-      .values(insertUser)
-      .returning();
-    return user;
+    try {
+      const [user] = await db
+        .insert(users)
+        .values(insertUser)
+        .returning();
+      return user;
+    } catch (error: any) {
+      throw new Error(`Failed to create user: ${error.message}`);
+    }
   }
 
   async getUser(userId: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.id, userId));
-    return user || undefined;
+    try {
+      const [user] = await db.select().from(users).where(eq(users.id, userId));
+      return user || undefined;
+    } catch (error: any) {
+      throw new Error(`Failed to get user: ${error.message}`);
+    }
   }
 
   async getAllUsers(): Promise<User[]> {
-    return await db.select().from(users);
+    try {
+      return await db.select().from(users);
+    } catch (error: any) {
+      throw new Error(`Failed to get all users: ${error.message}`);
+    }
   }
 
   async upsertUser(userData: UpsertUser): Promise<User> {
@@ -574,36 +678,99 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createJobOpportunity(job: InsertJobOpportunity): Promise<JobOpportunity> {
-    const [jobOpportunity] = await db
-      .insert(jobOpportunities)
-      .values(job)
-      .returning();
-    return jobOpportunity;
+    try {
+      const [jobOpportunity] = await db
+        .insert(jobOpportunities)
+        .values(job)
+        .returning();
+      return jobOpportunity;
+    } catch (error: any) {
+      throw new Error(`Failed to create job opportunity: ${error.message}`);
+    }
+  }
+
+  async updateJobOpportunity(id: string, updates: Partial<InsertJobOpportunity>): Promise<JobOpportunity> {
+    try {
+      const [updated] = await db
+        .update(jobOpportunities)
+        .set(updates)
+        .where(eq(jobOpportunities.id, id))
+        .returning();
+
+      if (!updated) {
+        throw new Error("Job opportunity not found");
+      }
+
+      return updated;
+    } catch (error: any) {
+      if (error.message === "Job opportunity not found") {
+        throw error;
+      }
+      throw new Error(`Failed to update job opportunity: ${error.message}`);
+    }
+  }
+
+  async deleteJobOpportunity(id: string): Promise<void> {
+    try {
+      // Soft delete by setting isActive to false
+      const [updated] = await db
+        .update(jobOpportunities)
+        .set({ isActive: false })
+        .where(eq(jobOpportunities.id, id))
+        .returning();
+
+      if (!updated) {
+        throw new Error("Job opportunity not found");
+      }
+    } catch (error: any) {
+      if (error.message === "Job opportunity not found") {
+        throw error;
+      }
+      throw new Error(`Failed to delete job opportunity: ${error.message}`);
+    }
   }
 
   async saveJob(userId: string, jobId: string): Promise<SavedJob> {
-    const [savedJob] = await db
-      .insert(savedJobs)
-      .values({ userId, jobId })
-      .onConflictDoNothing()
-      .returning();
-
-    // If no savedJob was returned due to conflict, fetch the existing one
-    if (!savedJob) {
-      const [existing] = await db
-        .select()
-        .from(savedJobs)
-        .where(and(eq(savedJobs.userId, userId), eq(savedJobs.jobId, jobId)));
-      return existing;
+    // Rate limiting for expensive save operations
+    if (!rateLimiter.isAllowed(userId, 'saveJob')) {
+      throw new Error("Rate limit exceeded for save operations. Please try again later.");
     }
 
-    return savedJob;
+    try {
+      const [savedJob] = await db
+        .insert(savedJobs)
+        .values({ userId, jobId })
+        .onConflictDoNothing()
+        .returning();
+
+      // If no savedJob was returned due to conflict, fetch the existing one
+      if (!savedJob) {
+        const [existing] = await db
+          .select()
+          .from(savedJobs)
+          .where(and(eq(savedJobs.userId, userId), eq(savedJobs.jobId, jobId)));
+        return existing;
+      }
+
+      return savedJob;
+    } catch (error: any) {
+      throw new Error(`Failed to save job: ${error.message}`);
+    }
   }
 
   async unsaveJob(userId: string, jobId: string): Promise<void> {
-    await db
-      .delete(savedJobs)
-      .where(and(eq(savedJobs.userId, userId), eq(savedJobs.jobId, jobId)));
+    // Rate limiting for expensive unsave operations
+    if (!rateLimiter.isAllowed(userId, 'unsaveJob')) {
+      throw new Error("Rate limit exceeded for unsave operations. Please try again later.");
+    }
+
+    try {
+      await db
+        .delete(savedJobs)
+        .where(and(eq(savedJobs.userId, userId), eq(savedJobs.jobId, jobId)));
+    } catch (error: any) {
+      throw new Error(`Failed to unsave job: ${error.message}`);
+    }
   }
 
   async getUserSavedJobs(userId: string): Promise<Array<{ id: string; userId: string; jobId: string; savedAt: Date; job: JobOpportunity }>> {
@@ -633,28 +800,46 @@ export class DatabaseStorage implements IStorage {
   }
 
   async saveNewsArticle(userId: string, articleId: string): Promise<SavedNewsArticle> {
-    const [savedArticle] = await db
-      .insert(savedNewsArticles)
-      .values({ userId, articleId })
-      .onConflictDoNothing()
-      .returning();
-
-    // If no savedArticle was returned due to conflict, fetch the existing one
-    if (!savedArticle) {
-      const [existing] = await db
-        .select()
-        .from(savedNewsArticles)
-        .where(and(eq(savedNewsArticles.userId, userId), eq(savedNewsArticles.articleId, articleId)));
-      return existing;
+    // Rate limiting for expensive save operations
+    if (!rateLimiter.isAllowed(userId, 'saveNewsArticle')) {
+      throw new Error("Rate limit exceeded for save operations. Please try again later.");
     }
 
-    return savedArticle;
+    try {
+      const [savedArticle] = await db
+        .insert(savedNewsArticles)
+        .values({ userId, articleId })
+        .onConflictDoNothing()
+        .returning();
+
+      // If no savedArticle was returned due to conflict, fetch the existing one
+      if (!savedArticle) {
+        const [existing] = await db
+          .select()
+          .from(savedNewsArticles)
+          .where(and(eq(savedNewsArticles.userId, userId), eq(savedNewsArticles.articleId, articleId)));
+        return existing;
+      }
+
+      return savedArticle;
+    } catch (error: any) {
+      throw new Error(`Failed to save news article: ${error.message}`);
+    }
   }
 
   async unsaveNewsArticle(userId: string, articleId: string): Promise<void> {
-    await db
-      .delete(savedNewsArticles)
-      .where(and(eq(savedNewsArticles.userId, userId), eq(savedNewsArticles.articleId, articleId)));
+    // Rate limiting for expensive unsave operations
+    if (!rateLimiter.isAllowed(userId, 'unsaveNewsArticle')) {
+      throw new Error("Rate limit exceeded for unsave operations. Please try again later.");
+    }
+
+    try {
+      await db
+        .delete(savedNewsArticles)
+        .where(and(eq(savedNewsArticles.userId, userId), eq(savedNewsArticles.articleId, articleId)));
+    } catch (error: any) {
+      throw new Error(`Failed to unsave news article: ${error.message}`);
+    }
   }
 
   async getUserSavedNewsArticles(userId: string): Promise<Array<{ id: string; userId: string; articleId: string; savedAt: Date; article: NewsArticle }>> {
@@ -722,21 +907,32 @@ export class DatabaseStorage implements IStorage {
   }
 
   async setDefaultResume(userId: string, resumeId: string): Promise<void> {
-    // First, unset any existing default for this user
-    await db
-      .update(resumes)
-      .set({ isDefault: false, updatedAt: new Date() })
-      .where(and(eq(resumes.userId, userId), eq(resumes.isDefault, true)));
+    try {
+      // Use a transaction to ensure atomicity and prevent race conditions
+      await db.transaction(async (tx) => {
+        // First, unset any existing default for this user
+        await tx
+          .update(resumes)
+          .set({ isDefault: false, updatedAt: new Date() })
+          .where(and(eq(resumes.userId, userId), eq(resumes.isDefault, true)));
 
-    // Set the specified resume as default
-    const [updated] = await db
-      .update(resumes)
-      .set({ isDefault: true, updatedAt: new Date() })
-      .where(and(eq(resumes.id, resumeId), eq(resumes.userId, userId)))
-      .returning();
+        // Set the specified resume as default
+        const [updated] = await tx
+          .update(resumes)
+          .set({ isDefault: true, updatedAt: new Date() })
+          .where(and(eq(resumes.id, resumeId), eq(resumes.userId, userId)))
+          .returning();
 
-    if (!updated) {
-      throw new Error("Resume not found or access denied");
+        if (!updated) {
+          throw new Error("Resume not found or access denied");
+        }
+      });
+    } catch (error: any) {
+      // Standardize error handling
+      if (error.message === "Resume not found or access denied") {
+        throw error;
+      }
+      throw new Error(`Failed to set default resume: ${error.message}`);
     }
   }
 
@@ -757,11 +953,56 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createNewsArticle(insertArticle: InsertNewsArticle): Promise<NewsArticle> {
-    const [article] = await db
-      .insert(newsArticles)
-      .values(insertArticle)
-      .returning();
-    return article;
+    try {
+      const [article] = await db
+        .insert(newsArticles)
+        .values(insertArticle)
+        .returning();
+      return article;
+    } catch (error: any) {
+      throw new Error(`Failed to create news article: ${error.message}`);
+    }
+  }
+
+  async updateNewsArticle(id: string, updates: Partial<InsertNewsArticle>): Promise<NewsArticle> {
+    try {
+      const [updated] = await db
+        .update(newsArticles)
+        .set({ ...updates, updatedAt: new Date() })
+        .where(eq(newsArticles.id, id))
+        .returning();
+
+      if (!updated) {
+        throw new Error("News article not found");
+      }
+
+      return updated;
+    } catch (error: any) {
+      if (error.message === "News article not found") {
+        throw error;
+      }
+      throw new Error(`Failed to update news article: ${error.message}`);
+    }
+  }
+
+  async deleteNewsArticle(id: string): Promise<void> {
+    try {
+      // Soft delete by setting isPublished to false
+      const [updated] = await db
+        .update(newsArticles)
+        .set({ isPublished: false, updatedAt: new Date() })
+        .where(eq(newsArticles.id, id))
+        .returning();
+
+      if (!updated) {
+        throw new Error("News article not found");
+      }
+    } catch (error: any) {
+      if (error.message === "News article not found") {
+        throw error;
+      }
+      throw new Error(`Failed to delete news article: ${error.message}`);
+    }
   }
 }
 
