@@ -3,6 +3,49 @@ import { pgTable, text, varchar, jsonb, timestamp, boolean, index } from "drizzl
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+// Define explicit schemas for resume JSONB fields to ensure type safety
+export const skillSchema = z.string().min(1, "Skill cannot be empty");
+export const skillsArraySchema = z.array(skillSchema);
+
+export const educationEntrySchema = z.object({
+  institution: z.string().min(1, "Institution is required"),
+  degree: z.string().min(1, "Degree is required"),
+  year: z.string().min(1, "Year is required"),
+  details: z.string().optional()
+});
+export const educationArraySchema = z.array(educationEntrySchema);
+
+export const workExperienceEntrySchema = z.object({
+  company: z.string().min(1, "Company is required"),
+  position: z.string().min(1, "Position is required"),
+  startDate: z.string().min(1, "Start date is required"),
+  endDate: z.string().optional(),
+  description: z.string().optional()
+});
+export const workExperienceArraySchema = z.array(workExperienceEntrySchema);
+
+export const certificationEntrySchema = z.object({
+  name: z.string().min(1, "Certification name is required"),
+  issuer: z.string().min(1, "Issuer is required"),
+  date: z.string().optional()
+});
+export const certificationsArraySchema = z.array(certificationEntrySchema);
+
+export const achievementSchema = z.string().min(1, "Achievement cannot be empty");
+export const achievementsArraySchema = z.array(achievementSchema);
+
+// Types for resume JSONB field schemas
+export type Skill = z.infer<typeof skillSchema>;
+export type SkillsArray = z.infer<typeof skillsArraySchema>;
+export type EducationEntry = z.infer<typeof educationEntrySchema>;
+export type EducationArray = z.infer<typeof educationArraySchema>;
+export type WorkExperienceEntry = z.infer<typeof workExperienceEntrySchema>;
+export type WorkExperienceArray = z.infer<typeof workExperienceArraySchema>;
+export type CertificationEntry = z.infer<typeof certificationEntrySchema>;
+export type CertificationsArray = z.infer<typeof certificationsArraySchema>;
+export type Achievement = z.infer<typeof achievementSchema>;
+export type AchievementsArray = z.infer<typeof achievementsArraySchema>;
+
 // Session storage table for Replit Auth
 export const sessions = pgTable(
   "sessions",
@@ -84,11 +127,11 @@ export const resumes = pgTable("resumes", {
   userId: varchar("user_id").references(() => users.id).notNull(),
   title: text("title").notNull(),
   summary: text("summary"),
-  skills: jsonb("skills"), // Array of skill strings
-  education: jsonb("education"), // Array of education objects
-  workExperience: jsonb("work_experience"), // Array of work experience objects
-  certifications: jsonb("certifications"), // Array of certification objects
-  achievements: jsonb("achievements"), // Array of achievement strings
+  skills: jsonb("skills").$type<SkillsArray | null>(),
+  education: jsonb("education").$type<EducationArray | null>(),
+  workExperience: jsonb("work_experience").$type<WorkExperienceArray | null>(),
+  certifications: jsonb("certifications").$type<CertificationsArray | null>(),
+  achievements: jsonb("achievements").$type<AchievementsArray | null>(),
   uploadedFileUrl: text("uploaded_file_url"), // URL to uploaded resume file
   isDefault: boolean("is_default").default(false),
   createdAt: timestamp("created_at").defaultNow(),
@@ -174,6 +217,12 @@ export const insertUserSchema = createInsertSchema(users).omit({
   createdAt: true,
 });
 
+// Schema for user profile updates (allows partial updates)
+export const updateUserSchema = insertUserSchema.partial().omit({
+  age: true, // Age shouldn't be updated after initial creation
+  updatedAt: true, // This is set automatically
+});
+
 export const insertQuestionnaireResponseSchema = createInsertSchema(questionnaireResponses).omit({
   id: true,
   completedAt: true,
@@ -203,7 +252,17 @@ export const insertResumeSchema = createInsertSchema(resumes).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+}).extend({
+  // Override JSONB fields with proper typed schemas
+  skills: skillsArraySchema.optional(),
+  education: educationArraySchema.optional(),
+  workExperience: workExperienceArraySchema.optional(),
+  certifications: certificationsArraySchema.optional(),
+  achievements: achievementsArraySchema.optional(),
 });
+
+// Schema for resume updates (allows partial updates)
+export const updateResumeSchema = insertResumeSchema.partial();
 
 export const insertNewsArticleSchema = createInsertSchema(newsArticles).omit({
   id: true,
@@ -214,7 +273,9 @@ export const insertNewsArticleSchema = createInsertSchema(newsArticles).omit({
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
+export type UpdateUser = z.infer<typeof updateUserSchema>;
 export type UpsertUser = typeof users.$inferInsert;
+
 export type QuestionnaireResponse = typeof questionnaireResponses.$inferSelect;
 export type InsertQuestionnaireResponse = z.infer<typeof insertQuestionnaireResponseSchema>;
 export type UserPreferences = typeof userPreferences.$inferSelect;
@@ -225,6 +286,7 @@ export type SavedJob = typeof savedJobs.$inferSelect;
 export type InsertSavedJob = z.infer<typeof insertSavedJobSchema>;
 export type Resume = typeof resumes.$inferSelect;
 export type InsertResume = z.infer<typeof insertResumeSchema>;
+export type UpdateResume = z.infer<typeof updateResumeSchema>;
 export type NewsArticle = typeof newsArticles.$inferSelect;
 export type InsertNewsArticle = z.infer<typeof insertNewsArticleSchema>;
 export type SavedNewsArticle = typeof savedNewsArticles.$inferSelect;

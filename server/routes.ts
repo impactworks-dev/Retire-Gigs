@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { 
   insertUserSchema,
+  updateUserSchema,
   insertQuestionnaireResponseSchema,
   insertUserPreferencesSchema,
   insertJobOpportunitySchema,
@@ -58,60 +59,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Forbidden" });
       }
 
-      const updates = req.body;
-      console.log("Received update request for user:", userId);
-      console.log("Update data:", updates);
-
-      // Validate that we have valid data
-      if (!updates || typeof updates !== 'object') {
-        return res.status(400).json({ message: "Invalid update data" });
-      }
-
       // Get existing user data first
       const existingUser = await storage.getUser(userId);
       if (!existingUser) {
         return res.status(404).json({ message: "User not found" });
       }
 
-      // For updates, we need to create a partial schema that allows the fields we want to update
-      const allowedUpdateFields = {
-        firstName: updates.firstName,
-        lastName: updates.lastName,
-        email: updates.email,
-        phoneNumber: updates.phoneNumber,
-        streetAddress: updates.streetAddress,
-        city: updates.city,
-        state: updates.state,
-        zipCode: updates.zipCode,
-        latitude: updates.latitude,
-        longitude: updates.longitude,
-        profileImageUrl: updates.profileImageUrl
-      };
-
-      // Remove undefined fields
-      const filteredUpdates = Object.fromEntries(
-        Object.entries(allowedUpdateFields).filter(([_, value]) => value !== undefined)
-      );
-
-      console.log("Filtered updates:", filteredUpdates);
+      // Validate updates using Zod schema
+      const validatedUpdates = updateUserSchema.parse(req.body);
+      console.log("Received update request for user:", userId);
+      console.log("Validated update data:", validatedUpdates);
 
       // Geocode address if any address fields were updated
-      let geocodeResult = null;
-      if (filteredUpdates.streetAddress || filteredUpdates.city || filteredUpdates.state || filteredUpdates.zipCode) {
+      let finalUpdates = { ...validatedUpdates };
+      if (validatedUpdates.streetAddress || validatedUpdates.city || validatedUpdates.state || validatedUpdates.zipCode) {
         const addressToGeocode = {
-          streetAddress: filteredUpdates.streetAddress || existingUser.streetAddress,
-          city: filteredUpdates.city || existingUser.city,
-          state: filteredUpdates.state || existingUser.state,
-          zipCode: filteredUpdates.zipCode || existingUser.zipCode
+          streetAddress: validatedUpdates.streetAddress || existingUser.streetAddress,
+          city: validatedUpdates.city || existingUser.city,
+          state: validatedUpdates.state || existingUser.state,
+          zipCode: validatedUpdates.zipCode || existingUser.zipCode
         };
 
         console.log("Attempting to geocode address:", addressToGeocode);
-        geocodeResult = await geocodeAddress(addressToGeocode);
+        const geocodeResult = await geocodeAddress(addressToGeocode);
 
         if (geocodeResult) {
           console.log("Geocoding successful:", geocodeResult);
-          filteredUpdates.latitude = geocodeResult.latitude;
-          filteredUpdates.longitude = geocodeResult.longitude;
+          finalUpdates.latitude = geocodeResult.latitude;
+          finalUpdates.longitude = geocodeResult.longitude;
         } else {
           console.log("Geocoding failed or no results");
         }
@@ -120,7 +95,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Merge with existing user data to ensure all required fields are present
       const userUpdateData = {
         ...existingUser,
-        ...filteredUpdates,
+        ...finalUpdates,
         id: userId,
         updatedAt: new Date()
       };

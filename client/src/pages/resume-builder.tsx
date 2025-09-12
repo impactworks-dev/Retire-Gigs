@@ -17,35 +17,12 @@ import { apiRequest } from "@/lib/queryClient";
 import { ObjectUploader } from "@/components/ObjectUploader";
 import { Layout } from "@/components/layout";
 import { Plus, Trash2, Upload, FileText, Download, Star, Edit3, ArrowLeft, Home } from "lucide-react";
-import type { Resume } from "@shared/schema";
+import type { Resume, SkillsArray, EducationArray, WorkExperienceArray, CertificationsArray, AchievementsArray, InsertResume, UpdateResume } from "@shared/schema";
+import { insertResumeSchema, updateResumeSchema, skillsArraySchema, educationArraySchema, workExperienceArraySchema, certificationsArraySchema, achievementsArraySchema } from "@shared/schema";
 import type { UploadResult } from "@uppy/core";
 
-const resumeFormSchema = z.object({
-  title: z.string().min(1, "Title is required"),
-  summary: z.string().optional(),
-  skills: z.array(z.string()).optional(),
-  education: z.array(z.object({
-    institution: z.string(),
-    degree: z.string(),
-    year: z.string(),
-    details: z.string().optional()
-  })).optional(),
-  workExperience: z.array(z.object({
-    company: z.string(),
-    position: z.string(),
-    startDate: z.string(),
-    endDate: z.string().optional(),
-    description: z.string().optional()
-  })).optional(),
-  certifications: z.array(z.object({
-    name: z.string(),
-    issuer: z.string(),
-    date: z.string().optional()
-  })).optional(),
-  achievements: z.array(z.string()).optional()
-});
-
-type ResumeFormData = z.infer<typeof resumeFormSchema>;
+// Use shared schemas for consistent typing across frontend and backend
+type ResumeFormData = InsertResume;
 
 export default function ResumeBuilder() {
   const [activeTab, setActiveTab] = useState("list");
@@ -56,7 +33,7 @@ export default function ResumeBuilder() {
   const queryClient = useQueryClient();
 
   const form = useForm<ResumeFormData>({
-    resolver: zodResolver(resumeFormSchema),
+    resolver: zodResolver(insertResumeSchema),
     defaultValues: {
       title: "",
       summary: "",
@@ -68,8 +45,8 @@ export default function ResumeBuilder() {
     }
   });
 
-  // Fetch user's resumes
-  const { data: resumes, isLoading } = useQuery({
+  // Fetch user's resumes with proper typing
+  const { data: resumes, isLoading } = useQuery<Resume[]>({
     queryKey: ["/api/resumes"],
   });
 
@@ -218,11 +195,11 @@ export default function ResumeBuilder() {
           form.reset({
             title: parseResult.parsedData.title || parseResult.resume.title,
             summary: parseResult.parsedData.summary || "",
-            skills: Array.isArray(parseResult.parsedData.skills) ? parseResult.parsedData.skills : [],
-            education: Array.isArray(parseResult.parsedData.education) ? parseResult.parsedData.education : [],
-            workExperience: Array.isArray(parseResult.parsedData.workExperience) ? parseResult.parsedData.workExperience : [],
-            certifications: Array.isArray(parseResult.parsedData.certifications) ? parseResult.parsedData.certifications : [],
-            achievements: Array.isArray(parseResult.parsedData.achievements) ? parseResult.parsedData.achievements : []
+            skills: parseResult.parsedData.skills || [],
+            education: parseResult.parsedData.education || [],
+            workExperience: parseResult.parsedData.workExperience || [],
+            certifications: parseResult.parsedData.certifications || [],
+            achievements: parseResult.parsedData.achievements || []
           });
           setActiveTab("builder");
           
@@ -267,11 +244,11 @@ export default function ResumeBuilder() {
     form.reset({
       title: resume.title,
       summary: resume.summary || "",
-      skills: Array.isArray(resume.skills) ? resume.skills as string[] : [],
-      education: Array.isArray(resume.education) ? resume.education as any[] : [],
-      workExperience: Array.isArray(resume.workExperience) ? resume.workExperience as any[] : [],
-      certifications: Array.isArray(resume.certifications) ? resume.certifications as any[] : [],
-      achievements: Array.isArray(resume.achievements) ? resume.achievements as string[] : []
+      skills: resume.skills || [],
+      education: resume.education || [],
+      workExperience: resume.workExperience || [],
+      certifications: resume.certifications || [],
+      achievements: resume.achievements || []
     });
     setActiveTab("builder");
   };
@@ -561,6 +538,7 @@ export default function ResumeBuilder() {
                             placeholder="Write a brief summary highlighting your experience and what you're looking for in your next role..."
                             rows={4}
                             {...field}
+                            value={field.value ?? ""}
                             data-testid="textarea-resume-summary"
                           />
                         </FormControl>
