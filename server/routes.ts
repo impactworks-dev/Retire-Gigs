@@ -20,6 +20,34 @@ import { setupAuth, isAuthenticated, isAdmin } from "./replitAuth";
 import { geocodeAddress } from "./geocoding";
 import { ResumeParserService } from "./resumeParser";
 import { jobMatchingService } from "./jobMatchingService";
+import { ZodError } from "zod";
+
+// Helper function to format Zod validation errors into user-friendly messages
+function formatZodError(error: ZodError): { message: string; errors?: Record<string, string> } {
+  const fieldErrors: Record<string, string> = {};
+  let hasFieldErrors = false;
+
+  for (const issue of error.issues) {
+    const fieldPath = issue.path.join('.');
+    if (fieldPath) {
+      fieldErrors[fieldPath] = issue.message;
+      hasFieldErrors = true;
+    }
+  }
+
+  if (hasFieldErrors) {
+    const firstError = Object.values(fieldErrors)[0];
+    return {
+      message: firstError,
+      errors: fieldErrors
+    };
+  }
+
+  // Fallback for non-field specific errors
+  return {
+    message: error.issues[0]?.message || "Validation failed"
+  };
+}
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
@@ -42,8 +70,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userData = insertUserSchema.parse(req.body);
       const user = await storage.createUser(userData);
-      res.json(user);
+      res.status(201).json(user);
     } catch (error) {
+      if (error instanceof ZodError) {
+        const zodErrorResponse = formatZodError(error);
+        return res.status(400).json(zodErrorResponse);
+      }
       res.status(400).json({ message: "Invalid user data" });
     }
   });
@@ -132,9 +164,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       const response = await storage.saveQuestionnaireResponse(responseData);
-      res.json(response);
+      res.status(201).json(response);
     } catch (error) {
       console.error("Error saving questionnaire:", error);
+      if (error instanceof ZodError) {
+        const zodErrorResponse = formatZodError(error);
+        return res.status(400).json(zodErrorResponse);
+      }
       res.status(400).json({ message: "Invalid questionnaire data" });
     }
   });
@@ -184,8 +220,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userId
       });
       const preferences = await storage.saveUserPreferences(preferencesData);
-      res.json(preferences);
+      res.status(201).json(preferences);
     } catch (error) {
+      if (error instanceof ZodError) {
+        const zodErrorResponse = formatZodError(error);
+        return res.status(400).json(zodErrorResponse);
+      }
       res.status(400).json({ message: "Invalid preferences data" });
     }
   });
@@ -259,8 +299,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const jobData = insertJobOpportunitySchema.parse(req.body);
       const job = await storage.createJobOpportunity(jobData);
-      res.json(job);
+      res.status(201).json(job);
     } catch (error) {
+      if (error instanceof ZodError) {
+        const zodErrorResponse = formatZodError(error);
+        return res.status(400).json(zodErrorResponse);
+      }
       res.status(400).json({ message: "Invalid job data" });
     }
   });
@@ -292,8 +336,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const articleData = insertNewsArticleSchema.parse(req.body);
       const article = await storage.createNewsArticle(articleData);
-      res.json(article);
+      res.status(201).json(article);
     } catch (error) {
+      if (error instanceof ZodError) {
+        const zodErrorResponse = formatZodError(error);
+        return res.status(400).json(zodErrorResponse);
+      }
       res.status(400).json({ message: "Invalid article data" });
     }
   });
@@ -309,7 +357,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const savedJob = await storage.saveJob(userId, jobId);
-      res.json(savedJob);
+      res.status(201).json(savedJob);
     } catch (error) {
       console.error("Error saving job:", error);
       res.status(500).json({ message: "Failed to save job" });
@@ -322,7 +370,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { jobId } = req.params;
 
       await storage.unsaveJob(userId, jobId);
-      res.json({ message: "Job unsaved successfully" });
+      res.status(204).send();
     } catch (error) {
       console.error("Error unsaving job:", error);
       res.status(500).json({ message: "Failed to unsave job" });
@@ -364,7 +412,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const savedArticle = await storage.saveNewsArticle(userId, articleId);
-      res.json(savedArticle);
+      res.status(201).json(savedArticle);
     } catch (error) {
       console.error("Error saving news article:", error);
       res.status(500).json({ message: "Failed to save news article" });
@@ -377,7 +425,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { articleId } = req.params;
 
       await storage.unsaveNewsArticle(userId, articleId);
-      res.json({ message: "News article unsaved successfully" });
+      res.status(204).send();
     } catch (error) {
       console.error("Error unsaving news article:", error);
       res.status(500).json({ message: "Failed to unsave news article" });
@@ -574,9 +622,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       const resume = await storage.createResume(resumeData);
-      res.json(resume);
+      res.status(201).json(resume);
     } catch (error) {
       console.error("Error creating resume:", error);
+      if (error instanceof ZodError) {
+        const zodErrorResponse = formatZodError(error);
+        return res.status(400).json(zodErrorResponse);
+      }
       res.status(400).json({ message: "Invalid resume data" });
     }
   });
@@ -623,7 +675,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       await storage.deleteResume(id);
-      res.json({ success: true });
+      res.status(204).send();
     } catch (error) {
       console.error("Error deleting resume:", error);
       res.status(500).json({ message: "Failed to delete resume" });
@@ -684,7 +736,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { id } = req.params;
 
       if (!req.body.uploadedFileUrl) {
-        return res.status(400).json({ error: "uploadedFileUrl is required" });
+        return res.status(400).json({ message: "uploadedFileUrl is required" });
       }
 
       // SECURITY: Validate uploadedFileUrl to prevent SSRF attacks
@@ -699,10 +751,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ];
         
         if (!allowedHosts.some(host => url.hostname === host || url.hostname.endsWith('.' + host))) {
-          return res.status(400).json({ error: "Invalid file URL - only object storage URLs are allowed" });
+          return res.status(400).json({ message: "Invalid file URL - only object storage URLs are allowed" });
         }
       } catch (urlError) {
-        return res.status(400).json({ error: "Invalid URL format" });
+        return res.status(400).json({ message: "Invalid URL format" });
       }
 
       // Check if resume exists and belongs to user
@@ -762,7 +814,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       console.error("Error updating resume with uploaded file:", error);
-      res.status(500).json({ error: "Internal server error" });
+      res.status(500).json({ message: "Internal server error" });
     }
   });
 
@@ -953,8 +1005,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       const job = await storage.createJobOpportunity(processedJob);
-      res.json({ success: true, job });
+      res.status(201).json({ success: true, job });
     } catch (error) {
+      if (error instanceof ZodError) {
+        const zodErrorResponse = formatZodError(error);
+        return res.status(400).json(zodErrorResponse);
+      }
       res.status(400).json({ message: "Invalid job data from Lindy AI" });
     }
   });
