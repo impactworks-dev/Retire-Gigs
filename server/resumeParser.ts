@@ -1,5 +1,31 @@
 import mammoth from 'mammoth';
 import { Storage } from '@google-cloud/storage';
+import { z } from 'zod';
+import { malwareScannerService, type MalwareScanResult } from './malwareScanner';
+
+// Security constants
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB limit
+
+// SECURITY: Allowed bucket names to prevent unauthorized access
+const ALLOWED_BUCKET_NAMES = [
+  'replit-object-storage', // Default Replit bucket
+  'replit-uploads', // Alternative bucket name
+  // Add other trusted bucket names as needed
+];
+const MAX_EXTRACTED_TEXT_LENGTH = 100000; // 100KB text limit
+const ALLOWED_CONTENT_TYPES = [
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
+  'application/pdf', // .pdf
+  'text/plain' // .txt
+];
+const ALLOWED_FILE_EXTENSIONS = ['.docx', '.pdf', '.txt'];
+
+// File header signatures for validation
+const FILE_SIGNATURES = {
+  pdf: [0x25, 0x50, 0x44, 0x46], // %PDF
+  docx: [0x50, 0x4B, 0x03, 0x04], // DOCX (ZIP signature)
+  txt: null // No specific signature for plain text
+};
 
 const REPLIT_SIDECAR_ENDPOINT = "http://127.0.0.1:1106";
 
@@ -55,6 +81,11 @@ export class ResumeParserService {
       const url = new URL(uploadUrl);
       const pathParts = url.pathname.split('/').filter(part => part.length > 0);
       const bucketName = pathParts[0];
+      
+      // SECURITY: Validate bucket name against allowed list
+      if (!ALLOWED_BUCKET_NAMES.includes(bucketName)) {
+        throw new Error(`Unauthorized bucket access: ${bucketName}. Only trusted buckets are allowed.`);
+      }
       const objectName = pathParts.slice(1).join('/');
 
       console.log('Parsing resume from:', bucketName, objectName);
@@ -63,58 +94,180 @@ export class ResumeParserService {
       const bucket = objectStorageClient.bucket(bucketName);
       const file = bucket.file(objectName);
       
+      // SECURITY: Check file size before downloading
+      const [metadata] = await file.getMetadata();
+      const fileSize = typeof metadata.size === 'string' ? parseInt(metadata.size || '0') : (metadata.size || 0);
+      
+      if (fileSize > MAX_FILE_SIZE) {
+        throw new Error(`File size ${fileSize} bytes exceeds maximum allowed size of ${MAX_FILE_SIZE} bytes`);
+      }
+      
       const [buffer] = await file.download();
       
-      // Get the actual file metadata to determine content type
-      const [metadata] = await file.getMetadata();
-      const contentType = metadata.contentType || '';
-      console.log('File content type:', contentType);
+      // SECURITY: Perform malware scanning before processing
+      console.log('Performing malware scan on uploaded file...');
+      let scanResult: MalwareScanResult;
+      try {
+        scanResult = await malwareScannerService.scanBuffer(buffer, objectName);
+        console.log('Malware scan result:', {
+          isClean: scanResult.isClean,
+          virusCount: scanResult.viruses.length,
+          scanTime: scanResult.scanTime
+        });
+        
+        if (scanResult.isInfected) {
+          throw new Error(`File rejected: Malware detected - ${scanResult.viruses.join(', ')}`);
+        }
+      } catch (scanError) {
+        console.error('Malware scanning failed:', scanError);
+        throw new Error(`Security scan failed: ${scanError instanceof Error ? scanError.message : 'Unknown scanning error'}`);
+      }
       
-      // Determine file type from content type or object name
+      // SECURITY: Validate content type
+      const contentType = metadata.contentType || '';
+      console.log('File content type:', contentType, 'Size:', fileSize, 'Scan result: CLEAN');
+      
+      if (!ALLOWED_CONTENT_TYPES.includes(contentType)) {
+        throw new Error(`Unsupported file type: ${contentType}. Only DOCX, PDF, and TXT files are allowed.`);
+      }
+      
+      // SECURITY: Validate file extension
+      const fileExtension = objectName.toLowerCase().substring(objectName.lastIndexOf('.'));
+      if (!ALLOWED_FILE_EXTENSIONS.includes(fileExtension)) {
+        throw new Error(`Unsupported file extension: ${fileExtension}. Only .docx, .pdf, and .txt files are allowed.`);
+      }
+      
+      // SECURITY: Validate file header signatures and enhanced TXT validation
+      this.validateFileHeader(buffer, fileExtension, contentType);
+      
+      // SECURITY: Additional validation for TXT files
+      if (fileExtension === '.txt') {
+        this.validateTxtFileContent(buffer);
+      }
+      
+      // Determine secure file type
       let fileType = '';
-      if (contentType.includes('pdf') || objectName.toLowerCase().includes('.pdf')) {
+      if (contentType === 'application/pdf') {
         fileType = 'pdf';
-      } else if (contentType.includes('wordprocessingml') || objectName.toLowerCase().includes('.docx')) {
+      } else if (contentType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
         fileType = 'docx';
-      } else if (contentType.includes('msword') || objectName.toLowerCase().includes('.doc')) {
-        fileType = 'doc';
-      } else if (contentType.includes('text') || objectName.toLowerCase().includes('.txt')) {
+      } else if (contentType === 'text/plain') {
         fileType = 'txt';
       } else {
-        // Default to trying text extraction for unknown types
-        fileType = 'unknown';
+        throw new Error(`Unsupported content type: ${contentType}`);
       }
 
       let extractedText = '';
 
-      // Extract text based on file type
+      // Extract text based on validated file type
       if (fileType === 'docx') {
         const result = await mammoth.extractRawText({ buffer });
         extractedText = result.value;
-      } else if (fileType === 'doc') {
-        // For .doc files, we'll do basic text extraction
-        extractedText = buffer.toString('utf8').replace(/[^\x20-\x7E\n\r]/g, ' ');
       } else if (fileType === 'pdf') {
-        // For PDF files, we'll extract basic text (limited functionality)
+        // Basic PDF text extraction (limited functionality)
         const text = buffer.toString('latin1');
         extractedText = text.replace(/[^\x20-\x7E\n\r]/g, ' ').replace(/\s+/g, ' ');
       } else if (fileType === 'txt') {
         extractedText = buffer.toString('utf8');
-      } else {
-        // Try to extract text from unknown file types
-        console.log('Unknown file type, attempting text extraction...');
-        extractedText = buffer.toString('utf8').replace(/[^\x20-\x7E\n\r]/g, ' ').replace(/\s+/g, ' ');
+      }
+
+      // SECURITY: Cap extracted text length to prevent memory exhaustion
+      if (extractedText.length > MAX_EXTRACTED_TEXT_LENGTH) {
+        console.warn(`Extracted text length ${extractedText.length} exceeds limit, truncating to ${MAX_EXTRACTED_TEXT_LENGTH}`);
+        extractedText = extractedText.substring(0, MAX_EXTRACTED_TEXT_LENGTH);
       }
 
       console.log('Extracted text length:', extractedText.length);
 
-      // Parse the extracted text
-      return this.parseTextContent(extractedText);
+      // SECURITY: Sanitize extracted text before processing
+      const sanitizedText = this.sanitizeExtractedText(extractedText);
+
+      // Parse the sanitized text
+      return this.parseTextContent(sanitizedText);
 
     } catch (error) {
       console.error('Error parsing resume:', error);
+      if (error instanceof Error) {
+        throw error; // Re-throw security validation errors with specific messages
+      }
       throw new Error('Failed to parse resume file');
     }
+  }
+
+  // SECURITY: Validate file header signatures to detect malicious files
+  private validateFileHeader(buffer: Buffer, fileExtension: string, contentType: string): void {
+    if (buffer.length < 4) {
+      throw new Error('File is too small to be a valid document');
+    }
+
+    const header = Array.from(buffer.slice(0, 4));
+    
+    if (fileExtension === '.pdf' && contentType === 'application/pdf') {
+      const pdfSignature = FILE_SIGNATURES.pdf;
+      if (!pdfSignature.every((byte, index) => header[index] === byte)) {
+        throw new Error('File does not have a valid PDF header signature');
+      }
+    } else if (fileExtension === '.docx' && contentType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+      const docxSignature = FILE_SIGNATURES.docx;
+      if (!docxSignature.every((byte, index) => header[index] === byte)) {
+        throw new Error('File does not have a valid DOCX header signature');
+      }
+    }
+    // TXT files don't have a specific signature, so we skip validation for them
+  }
+
+  // SECURITY: Sanitize extracted text to prevent injection attacks while preserving formatting
+  private sanitizeExtractedText(text: string): string {
+    // Remove control characters except newlines, carriage returns, and tabs
+    let sanitized = text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, '');
+    
+    // Remove potentially dangerous HTML/XML characters but preserve structure
+    sanitized = sanitized.replace(/[<>"'&]/g, ' ');
+    
+    // FIXED: Preserve newlines and paragraphs for better parsing
+    // Normalize multiple spaces within lines but keep line breaks
+    sanitized = sanitized
+      .split('\n')
+      .map(line => line.replace(/[ \t]+/g, ' ').trim())
+      .join('\n')
+      .replace(/\n{3,}/g, '\n\n'); // Limit excessive newlines
+    
+    // Limit line length to prevent extremely long lines
+    const lines = sanitized.split('\n').map(line => 
+      line.length > 1000 ? line.substring(0, 1000) + '...' : line
+    );
+    
+    return lines.join('\n');
+  }
+
+  // SECURITY: Enhanced TXT file validation
+  private validateTxtFileContent(buffer: Buffer): void {
+    // Check if file is actually a text file by analyzing content
+    const text = buffer.toString('utf8', 0, Math.min(buffer.length, 1024)); // Check first 1KB
+    
+    // Calculate percentage of printable characters
+    const printableChars = text.match(/[\x20-\x7E\n\r\t]/g) || [];
+    const printableRatio = printableChars.length / text.length;
+    
+    if (printableRatio < 0.85) {
+      throw new Error('TXT file contains too much non-printable content. File may be corrupted or malicious.');
+    }
+    
+    // Check for suspicious binary content that might indicate an executable disguised as TXT
+    const suspiciousBinaryPatterns = [
+      /\x00{10,}/, // Long sequences of null bytes
+      /[\x80-\xFF]{20,}/, // Long sequences of high-bit characters
+      /\x7F\x45\x4C\x46/, // ELF magic number
+      /\x4D\x5A/, // MZ header (PE executable)
+    ];
+    
+    for (const pattern of suspiciousBinaryPatterns) {
+      if (pattern.test(text)) {
+        throw new Error('TXT file contains suspicious binary content. This may be an executable file disguised as text.');
+      }
+    }
+    
+    console.log(`TXT file validation passed: ${printableRatio * 100}% printable characters`);
   }
 
   private parseTextContent(text: string): ParsedResumeData {

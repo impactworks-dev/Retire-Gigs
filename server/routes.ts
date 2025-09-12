@@ -1,11 +1,13 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
+import rateLimit from "express-rate-limit";
 import { storage } from "./storage";
 import { 
   insertUserSchema,
   updateUserSchema,
   insertQuestionnaireResponseSchema,
   insertUserPreferencesSchema,
+  updateUserPreferencesSchema,
   insertJobOpportunitySchema,
   insertResumeSchema,
   insertNewsArticleSchema
@@ -21,6 +23,7 @@ import { geocodeAddress } from "./geocoding";
 import { ResumeParserService } from "./resumeParser";
 import { jobMatchingService } from "./jobMatchingService";
 import { ZodError } from "zod";
+import { malwareScannerService } from "./malwareScanner";
 
 // Helper function to format Zod validation errors into user-friendly messages
 function formatZodError(error: ZodError): { message: string; errors?: Record<string, string> } {
@@ -52,6 +55,34 @@ function formatZodError(error: ZodError): { message: string; errors?: Record<str
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
   await setupAuth(app);
+  
+  // SECURITY: Rate limiting middleware for different endpoint types
+  const generalRateLimit = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // Limit each IP to 100 requests per windowMs
+    message: { message: "Too many requests, please try again later." },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+  
+  const strictRateLimit = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 20, // Limit each IP to 20 requests per windowMs for sensitive operations
+    message: { message: "Too many requests for this operation, please try again later." },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+  
+  const resumeParsingRateLimit = rateLimit({
+    windowMs: 60 * 60 * 1000, // 1 hour
+    max: 5, // Only 5 resume parsing operations per hour per IP
+    message: { message: "Resume parsing limit exceeded. Please try again in an hour." },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+  
+  // Apply general rate limiting to all routes
+  app.use('/api/', generalRateLimit);
 
   // Auth routes
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
@@ -141,7 +172,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Save questionnaire responses
-  app.post("/api/questionnaire", isAuthenticated, async (req: any, res) => {
+  app.post("/api/questionnaire", strictRateLimit, isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       
@@ -212,16 +243,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Save user preferences
-  app.post("/api/preferences", isAuthenticated, async (req: any, res) => {
+  app.post("/api/preferences", strictRateLimit, isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
+      
+      // SECURITY: Strict validation using enhanced schema
       const preferencesData = insertUserPreferencesSchema.parse({
         ...req.body,
         userId
       });
+      
+      console.log('Validated preferences data:', preferencesData);
       const preferences = await storage.saveUserPreferences(preferencesData);
       res.status(201).json(preferences);
     } catch (error) {
+      console.error('Error saving user preferences:', error);
       if (error instanceof ZodError) {
         const zodErrorResponse = formatZodError(error);
         return res.status(400).json(zodErrorResponse);
@@ -241,9 +277,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Forbidden" });
       }
 
-      const preferences = await storage.updateUserPreferences(userId, req.body);
+      // SECURITY: Strict validation using enhanced schema for updates
+      const validatedUpdates = updateUserPreferencesSchema.parse(req.body);
+      console.log('Validated preference updates:', validatedUpdates);
+      
+      const preferences = await storage.updateUserPreferences(userId, validatedUpdates);
       res.json(preferences);
     } catch (error) {
+      console.error('Error updating user preferences:', error);
+      if (error instanceof ZodError) {
+        const zodErrorResponse = formatZodError(error);
+        return res.status(400).json(zodErrorResponse);
+      }
       res.status(400).json({ message: "Failed to update preferences" });
     }
   });
@@ -696,8 +741,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Resume file upload endpoint
-  app.post("/api/resumes/upload", isAuthenticated, async (req, res) => {
+  // Resume file upload endpoint - SECURITY: Apply strict rate limiting for resume operations
+  app.post("/api/resumes/upload", resumeParsingRateLimit, isAuthenticated, async (req, res) => {
     const objectStorageService = new ObjectStorageService();
     const uploadURL = await objectStorageService.getObjectEntityUploadURL();
     res.json({ uploadURL });
@@ -730,7 +775,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Update resume with uploaded file URL and parse content
-  app.put("/api/resumes/:id/upload", isAuthenticated, async (req: any, res) => {
+  app.put("/api/resumes/:id/upload", resumeParsingRateLimit, isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       const { id } = req.params;
@@ -874,7 +919,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Lindy AI: Trigger job search for specific user
-  app.post("/api/lindy/trigger-job-search", authenticateLindy, async (req, res) => {
+  app.post("/api/lindy/trigger-job-search", strictRateLimit, authenticateLindy, async (req, res) => {
     try {
       const { userId, searchContext } = req.body;
       
@@ -1038,7 +1083,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get personalized job matches for authenticated user
-  app.get("/api/jobs/personalized", isAuthenticated, async (req: any, res) => {
+  app.get("/api/jobs/personalized", strictRateLimit, isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
       const matchingJobs = await jobMatchingService.findMatchingJobsForUser(userId);
@@ -1046,6 +1091,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error getting personalized jobs:", error);
       res.status(500).json({ message: "Failed to get personalized jobs" });
+    }
+  });
+
+  // SECURITY: Malware scanner status endpoint for monitoring
+  app.get("/api/system/scanner-status", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const status = await malwareScannerService.getStatus();
+      const isReady = await malwareScannerService.isReady();
+      
+      res.json({
+        ...status,
+        ready: isReady,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("Error checking scanner status:", error);
+      res.status(500).json({ 
+        message: "Failed to check scanner status", 
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
     }
   });
 

@@ -34,6 +34,51 @@ export const certificationsArraySchema = z.array(certificationEntrySchema);
 export const achievementSchema = z.string().min(1, "Achievement cannot be empty");
 export const achievementsArraySchema = z.array(achievementSchema);
 
+// SECURITY: Add validation schemas for user preferences and questionnaire responses
+export const jobTypeSchema = z.enum([
+  "outdoorwork", "deskwork", "physicalwork", "customerservice", 
+  "sales", "healthcare", "education", "retail", "hospitality", 
+  "technology", "administrative", "creative", "management", "other"
+], { message: "Invalid job type" });
+
+export const locationPreferenceSchema = z.enum([
+  "remote", "closetohome", "willingtocommute", "willingtorelocate", "hybrid"
+], { message: "Invalid location preference" });
+
+export const schedulePreferenceSchema = z.enum([
+  "daily", "weekly", "biweekly", "monthly"
+], { message: "Invalid schedule preference" });
+
+// Arrays with reasonable limits to prevent abuse
+export const preferredJobTypesSchema = z.array(jobTypeSchema)
+  .min(1, "At least one job type must be selected")
+  .max(5, "Maximum 5 job types allowed")
+  .refine(arr => arr.length === new Set(arr).size, "Duplicate job types not allowed");
+
+export const preferredLocationsSchema = z.array(locationPreferenceSchema)
+  .min(1, "At least one location preference must be selected")
+  .max(3, "Maximum 3 location preferences allowed")
+  .refine(arr => arr.length === new Set(arr).size, "Duplicate location preferences not allowed");
+
+// Questionnaire responses validation with reasonable limits
+export const questionnaireResponseValueSchema = z.union([
+  z.string().max(500, "Response text too long"), // Limit text responses
+  z.number().min(0).max(10), // Limit numeric responses (e.g., ratings)
+  z.boolean(),
+  z.array(z.string().max(100, "Option text too long")).max(10, "Too many options selected")
+]);
+
+export const questionnaireResponsesSchema = z.record(
+  z.string().regex(/^[a-zA-Z0-9_-]+$/, "Invalid question ID format").max(50, "Question ID too long"),
+  questionnaireResponseValueSchema
+).refine(
+  (responses) => Object.keys(responses).length <= 50,
+  "Too many questionnaire responses"
+).refine(
+  (responses) => Object.keys(responses).length >= 1,
+  "At least one questionnaire response is required"
+);
+
 // Types for resume JSONB field schemas
 export type Skill = z.infer<typeof skillSchema>;
 export type SkillsArray = z.infer<typeof skillsArraySchema>;
@@ -226,12 +271,23 @@ export const updateUserSchema = insertUserSchema.partial().omit({
 export const insertQuestionnaireResponseSchema = createInsertSchema(questionnaireResponses).omit({
   id: true,
   completedAt: true,
+}).extend({
+  // SECURITY: Add proper validation for questionnaire responses JSONB field
+  responses: questionnaireResponsesSchema,
 });
 
 export const insertUserPreferencesSchema = createInsertSchema(userPreferences).omit({
   id: true,
   updatedAt: true,
+}).extend({
+  // SECURITY: Add proper validation for JSONB fields
+  schedulePreference: schedulePreferenceSchema.optional(),
+  preferredJobTypes: preferredJobTypesSchema.optional(),
+  preferredLocations: preferredLocationsSchema.optional(),
 });
+
+// Schema for updating user preferences (allows partial updates)
+export const updateUserPreferencesSchema = insertUserPreferencesSchema.partial();
 
 export const insertJobOpportunitySchema = createInsertSchema(jobOpportunities).omit({
   id: true,
@@ -280,6 +336,16 @@ export type QuestionnaireResponse = typeof questionnaireResponses.$inferSelect;
 export type InsertQuestionnaireResponse = z.infer<typeof insertQuestionnaireResponseSchema>;
 export type UserPreferences = typeof userPreferences.$inferSelect;
 export type InsertUserPreferences = z.infer<typeof insertUserPreferencesSchema>;
+export type UpdateUserPreferences = z.infer<typeof updateUserPreferencesSchema>;
+
+// Export individual preference types for use in UI components
+export type JobType = z.infer<typeof jobTypeSchema>;
+export type LocationPreference = z.infer<typeof locationPreferenceSchema>;
+export type SchedulePreference = z.infer<typeof schedulePreferenceSchema>;
+export type PreferredJobTypes = z.infer<typeof preferredJobTypesSchema>;
+export type PreferredLocations = z.infer<typeof preferredLocationsSchema>;
+export type QuestionnaireResponses = z.infer<typeof questionnaireResponsesSchema>;
+export type QuestionnaireResponseValue = z.infer<typeof questionnaireResponseValueSchema>;
 export type JobOpportunity = typeof jobOpportunities.$inferSelect;
 export type InsertJobOpportunity = z.infer<typeof insertJobOpportunitySchema>;
 export type SavedJob = typeof savedJobs.$inferSelect;
