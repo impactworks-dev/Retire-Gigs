@@ -24,6 +24,11 @@ import { ResumeParserService } from "./resumeParser";
 import { jobMatchingService } from "./jobMatchingService";
 import { ZodError } from "zod";
 import { malwareScannerService } from "./malwareScanner";
+import { logger } from "./logger";
+import { drizzle } from "drizzle-orm/neon-serverless";
+import { neon } from "@neondatabase/serverless";
+import path from "path";
+import fs from "fs";
 
 // Helper function to format Zod validation errors into user-friendly messages
 function formatZodError(error: ZodError): { message: string; errors?: Record<string, string> } {
@@ -84,6 +89,102 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Apply general rate limiting to all routes
   app.use('/api/', generalRateLimit);
 
+  // Serve service worker file with correct MIME type (needed for PWA functionality)
+  app.get('/sw.js', (req, res) => {
+    const swPath = path.resolve(process.cwd(), 'public', 'sw.js');
+    
+    try {
+      if (fs.existsSync(swPath)) {
+        res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+        res.setHeader('Service-Worker-Allowed', '/');
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.sendFile(swPath);
+        logger.info('Service worker served successfully', { 
+          operation: 'service_worker_serve',
+          path: '/sw.js'
+        });
+      } else {
+        logger.error('Service worker file not found', null, { 
+          operation: 'service_worker_serve',
+          expectedPath: swPath
+        });
+        res.status(404).json({ message: 'Service worker not found' });
+      }
+    } catch (error) {
+      logger.error('Error serving service worker', error, { 
+        operation: 'service_worker_serve' 
+      });
+      res.status(500).json({ message: 'Internal server error' });
+    }
+  });
+
+  // Health check endpoint for load balancers and monitoring
+  app.get('/api/health', async (req, res) => {
+    const startTime = Date.now();
+    const healthStatus = {
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      services: {
+        database: 'unknown',
+        storage: 'unknown', 
+        auth: 'unknown'
+      },
+      version: process.env.npm_package_version || '1.0.0',
+      environment: process.env.NODE_ENV || 'development'
+    };
+
+    try {
+      // Check database connectivity (only if DATABASE_URL is configured)
+      if (process.env.DATABASE_URL) {
+        const dbStartTime = Date.now();
+        const sql = neon(process.env.DATABASE_URL);
+        const db = drizzle(sql);
+        await sql('SELECT 1 as health_check');
+        const dbDuration = Date.now() - dbStartTime;
+        healthStatus.services.database = 'healthy';
+        
+        logger.performance('health_check_database', dbDuration, true, { service: 'postgresql' });
+      } else {
+        healthStatus.services.database = 'not_configured';
+        logger.info('Database health check skipped - DATABASE_URL not configured', { 
+          operation: 'health_check',
+          service: 'postgresql'
+        });
+      }
+
+      // Check storage service
+      try {
+        const storageStartTime = Date.now();
+        await storage.getJobOpportunities(); // Simple storage operation
+        const storageDuration = Date.now() - storageStartTime;
+        healthStatus.services.storage = 'healthy';
+        
+        logger.performance('health_check_storage', storageDuration, true, { service: 'memory_storage' });
+      } catch (error) {
+        healthStatus.services.storage = 'unhealthy';
+        logger.error('Health check storage failed', error, { service: 'memory_storage' });
+      }
+
+      // Check auth service availability (basic check)
+      healthStatus.services.auth = 'healthy'; // Auth is middleware-based, assume healthy if server is running
+
+      const totalDuration = Date.now() - startTime;
+      logger.performance('health_check_total', totalDuration, true, { 
+        allServicesHealthy: Object.values(healthStatus.services).every(s => s === 'healthy')
+      });
+
+      res.status(200).json(healthStatus);
+    } catch (error) {
+      healthStatus.status = 'unhealthy';
+      healthStatus.services.database = 'unhealthy';
+      
+      const totalDuration = Date.now() - startTime;
+      logger.error('Health check failed', error, { duration: totalDuration });
+      
+      res.status(503).json(healthStatus);
+    }
+  });
+
   // Auth routes
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
     try {
@@ -91,7 +192,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = await storage.getUser(userId);
       res.json(user);
     } catch (error) {
-      console.error("Error fetching user:", error);
+      logger.error("Error fetching user", error, { operation: 'fetch_user' });
       res.status(500).json({ message: "Failed to fetch user" });
     }
   });
@@ -130,8 +231,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Validate updates using Zod schema
       const validatedUpdates = updateUserSchema.parse(req.body);
-      console.log("Received update request for user:", userId);
-      console.log("Validated update data:", validatedUpdates);
+      
+      logger.info("User profile update requested", {
+        userId,
+        operation: 'user_profile_update',
+        fieldsUpdated: Object.keys(validatedUpdates),
+        hasAddressUpdate: !!(validatedUpdates.streetAddress || validatedUpdates.city || validatedUpdates.state || validatedUpdates.zipCode)
+      });
 
       // Geocode address if any address fields were updated
       let finalUpdates = { ...validatedUpdates };
@@ -143,15 +249,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
           zipCode: validatedUpdates.zipCode || existingUser.zipCode
         };
 
-        console.log("Attempting to geocode address:", addressToGeocode);
+        // Geocoding is now handled with PII-safe logging in the geocodeAddress function
         const geocodeResult = await geocodeAddress(addressToGeocode);
 
         if (geocodeResult) {
-          console.log("Geocoding successful:", geocodeResult);
+          logger.info("Geocoding successful for user profile update", {
+            userId,
+            operation: 'profile_geocoding',
+            hasLatitude: !!geocodeResult.latitude,
+            hasLongitude: !!geocodeResult.longitude,
+            hasFormattedAddress: !!geocodeResult.formattedAddress
+          });
           finalUpdates.latitude = geocodeResult.latitude;
           finalUpdates.longitude = geocodeResult.longitude;
         } else {
-          console.log("Geocoding failed or no results");
+          logger.warn("Geocoding failed for user profile update", {
+            userId,
+            operation: 'profile_geocoding'
+          });
         }
       }
 
@@ -166,7 +281,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = await storage.upsertUser(userUpdateData);
       res.json(user);
     } catch (error) {
-      console.error("Error updating user profile:", error);
+      logger.error("Failed to update user profile", error, {
+        userId,
+        operation: 'user_profile_update'
+      });
       res.status(400).json({ message: "Failed to update profile" });
     }
   });
@@ -197,7 +315,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const response = await storage.saveQuestionnaireResponse(responseData);
       res.status(201).json(response);
     } catch (error) {
-      console.error("Error saving questionnaire:", error);
+      logger.error("Error saving questionnaire", error, { operation: 'save_questionnaire' });
       if (error instanceof ZodError) {
         const zodErrorResponse = formatZodError(error);
         return res.status(400).json(zodErrorResponse);
@@ -253,11 +371,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userId
       });
       
-      console.log('Validated preferences data:', preferencesData);
+      logger.info('User preferences validated successfully', { operation: 'validate_preferences', hasPreferences: !!preferencesData });
       const preferences = await storage.saveUserPreferences(preferencesData);
       res.status(201).json(preferences);
     } catch (error) {
-      console.error('Error saving user preferences:', error);
+      logger.error('Error saving user preferences', error, { operation: 'save_preferences' });
       if (error instanceof ZodError) {
         const zodErrorResponse = formatZodError(error);
         return res.status(400).json(zodErrorResponse);
@@ -279,12 +397,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // SECURITY: Strict validation using enhanced schema for updates
       const validatedUpdates = updateUserPreferencesSchema.parse(req.body);
-      console.log('Validated preference updates:', validatedUpdates);
+      logger.info('User preference updates validated successfully', { operation: 'validate_preference_updates', fieldsUpdated: Object.keys(validatedUpdates) });
       
       const preferences = await storage.updateUserPreferences(userId, validatedUpdates);
       res.json(preferences);
     } catch (error) {
-      console.error('Error updating user preferences:', error);
+      logger.error('Error updating user preferences', error, { operation: 'update_preferences' });
       if (error instanceof ZodError) {
         const zodErrorResponse = formatZodError(error);
         return res.status(400).json(zodErrorResponse);
@@ -404,7 +522,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const savedJob = await storage.saveJob(userId, jobId);
       res.status(201).json(savedJob);
     } catch (error) {
-      console.error("Error saving job:", error);
+      logger.error("Error saving job", error, { operation: 'save_job' });
       res.status(500).json({ message: "Failed to save job" });
     }
   });
@@ -417,7 +535,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.unsaveJob(userId, jobId);
       res.status(204).send();
     } catch (error) {
-      console.error("Error unsaving job:", error);
+      logger.error("Error unsaving job", error, { operation: 'unsave_job' });
       res.status(500).json({ message: "Failed to unsave job" });
     }
   });
@@ -428,7 +546,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const savedJobs = await storage.getUserSavedJobs(userId);
       res.json(savedJobs);
     } catch (error) {
-      console.error("Error fetching saved jobs:", error);
+      logger.error("Error fetching saved jobs", error, { operation: 'fetch_saved_jobs' });
       res.status(500).json({ message: "Failed to fetch saved jobs" });
     }
   });
@@ -441,7 +559,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const isSaved = await storage.isJobSaved(userId, jobId);
       res.json({ isSaved });
     } catch (error) {
-      console.error("Error checking if job is saved:", error);
+      logger.error("Error checking if job is saved", error, { operation: 'check_job_saved' });
       res.status(500).json({ message: "Failed to check saved status" });
     }
   });
@@ -459,7 +577,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const savedArticle = await storage.saveNewsArticle(userId, articleId);
       res.status(201).json(savedArticle);
     } catch (error) {
-      console.error("Error saving news article:", error);
+      logger.error("Error saving news article", error, { operation: 'save_news_article' });
       res.status(500).json({ message: "Failed to save news article" });
     }
   });
@@ -472,7 +590,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.unsaveNewsArticle(userId, articleId);
       res.status(204).send();
     } catch (error) {
-      console.error("Error unsaving news article:", error);
+      logger.error("Error unsaving news article", error, { operation: 'unsave_news_article' });
       res.status(500).json({ message: "Failed to unsave news article" });
     }
   });
@@ -483,7 +601,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const savedArticles = await storage.getUserSavedNewsArticles(userId);
       res.json(savedArticles);
     } catch (error) {
-      console.error("Error fetching saved news articles:", error);
+      logger.error("Error fetching saved news articles", error, { operation: 'fetch_saved_news' });
       res.status(500).json({ message: "Failed to fetch saved news articles" });
     }
   });
@@ -496,7 +614,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const isSaved = await storage.isNewsArticleSaved(userId, articleId);
       res.json({ isSaved });
     } catch (error) {
-      console.error("Error checking if news article is saved:", error);
+      logger.error("Error checking if news article is saved", error, { operation: 'check_news_saved' });
       res.status(500).json({ message: "Failed to check saved status" });
     }
   });
@@ -517,13 +635,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       if (error) {
-        console.error("Resend error:", error);
+        logger.error("Failed to send notification via Resend", error, {
+          operation: 'email_notification',
+          service: 'resend'
+        });
         return res.status(500).json({ message: "Failed to send notification" });
       }
 
       res.json({ success: true, data });
     } catch (error) {
-      console.error("Error sending notification:", error);
+      logger.error("Failed to send email notification", error, {
+        operation: 'email_notification'
+      });
       res.status(500).json({ message: "Failed to send notification" });
     }
   });
@@ -563,21 +686,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       if (error) {
-        console.error("Resend test email error:", error);
+        logger.error("Resend test email error", error, { operation: 'test_email', service: 'resend' });
         return res.status(500).json({ 
           message: "Failed to send test email", 
           error: error 
         });
       }
 
-      console.log("Test email sent successfully:", data);
+      logger.info("Test email sent successfully", { operation: 'test_email', service: 'resend', success: true });
       res.json({ 
         success: true, 
         message: "Test email sent to dante@impactworks.com",
         data 
       });
     } catch (error) {
-      console.error("Error sending test email:", error);
+      logger.error("Error sending test email", error, { operation: 'test_email' });
       res.status(500).json({ message: "Failed to send test email" });
     }
   });
@@ -605,14 +728,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         to: phoneNumber,
       });
 
-      console.log(`Test SMS sent successfully to ${phoneNumber}, SID: ${message.sid}`);
+      logger.info("Test SMS sent successfully", { operation: 'test_sms', service: 'twilio', success: true, messageSid: message.sid });
       res.json({ 
         success: true, 
         message: `Test SMS sent to ${phoneNumber}`,
         sid: message.sid
       });
     } catch (error) {
-      console.error("Error sending test SMS:", error);
+      logger.error("Error sending test SMS", error, { operation: 'test_sms', service: 'twilio' });
       res.status(500).json({ 
         message: "Failed to send test SMS", 
         error: error instanceof Error ? error.message : "Unknown error"
@@ -629,7 +752,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const resumes = await storage.getUserResumes(userId);
       res.json(resumes);
     } catch (error) {
-      console.error("Error fetching resumes:", error);
+      logger.error("Error fetching resumes", error, { operation: 'fetch_resumes' });
       res.status(500).json({ message: "Failed to fetch resumes" });
     }
   });
@@ -652,7 +775,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(resume);
     } catch (error) {
-      console.error("Error fetching resume:", error);
+      logger.error("Error fetching resume", error, { operation: 'fetch_resume' });
       res.status(500).json({ message: "Failed to fetch resume" });
     }
   });
@@ -669,7 +792,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const resume = await storage.createResume(resumeData);
       res.status(201).json(resume);
     } catch (error) {
-      console.error("Error creating resume:", error);
+      logger.error("Error creating resume", error, { operation: 'create_resume' });
       if (error instanceof ZodError) {
         const zodErrorResponse = formatZodError(error);
         return res.status(400).json(zodErrorResponse);
@@ -698,7 +821,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updatedResume = await storage.updateResume(id, updates);
       res.json(updatedResume);
     } catch (error) {
-      console.error("Error updating resume:", error);
+      logger.error("Error updating resume", error, { operation: 'update_resume' });
       res.status(400).json({ message: "Failed to update resume" });
     }
   });
@@ -722,7 +845,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.deleteResume(id);
       res.status(204).send();
     } catch (error) {
-      console.error("Error deleting resume:", error);
+      logger.error("Error deleting resume", error, { operation: 'delete_resume' });
       res.status(500).json({ message: "Failed to delete resume" });
     }
   });
@@ -736,7 +859,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.setDefaultResume(userId, id);
       res.json({ success: true });
     } catch (error) {
-      console.error("Error setting default resume:", error);
+      logger.error("Error setting default resume", error, { operation: 'set_default_resume' });
       res.status(400).json({ message: (error as Error).message || "Failed to set default resume" });
     }
   });
@@ -766,7 +889,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       objectStorageService.downloadObject(objectFile, res);
     } catch (error) {
-      console.error("Error checking object access:", error);
+      logger.error("Error checking object access", error, { operation: 'check_object_access' });
       if (error instanceof ObjectNotFoundError) {
         return res.sendStatus(404);
       }
@@ -824,12 +947,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Parse the uploaded resume file
       let parsedData = null;
       try {
-        console.log("Parsing resume from URL:", req.body.uploadedFileUrl);
+        logger.info("Starting resume parsing", {
+          userId,
+          operation: 'resume_parse',
+          hasUploadUrl: !!req.body.uploadedFileUrl
+        });
         const resumeParser = new ResumeParserService();
         parsedData = await resumeParser.parseResumeFromUrl(req.body.uploadedFileUrl);
-        console.log("Resume parsed successfully:", parsedData.title);
+        logger.info("Resume parsed successfully", {
+          userId,
+          operation: 'resume_parse',
+          hasTitle: !!parsedData.title,
+          hasSummary: !!parsedData.summary,
+          skillsCount: parsedData.skills?.length || 0,
+          workExperienceCount: parsedData.workExperience?.length || 0
+        });
       } catch (parseError) {
-        console.error("Error parsing resume:", parseError);
+        logger.error("Resume parsing failed", parseError, {
+          userId,
+          operation: 'resume_parse'
+        });
         // Continue without parsed data - user can still edit manually
       }
 
@@ -858,7 +995,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         parsedData: parsedData
       });
     } catch (error) {
-      console.error("Error updating resume with uploaded file:", error);
+      logger.error("Failed to update resume with uploaded file", error, {
+        userId,
+        operation: 'resume_file_update'
+      });
       res.status(500).json({ message: "Internal server error" });
     }
   });
@@ -913,7 +1053,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(userData);
     } catch (error) {
-      console.error("Error fetching user preferences for Lindy:", error);
+      logger.error("Failed to fetch user preferences for Lindy", error, {
+        operation: 'lindy_user_preferences'
+      });
       res.status(500).json({ message: "Failed to fetch user preferences" });
     }
   });
@@ -935,11 +1077,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "User or preferences not found" });
       }
 
-      // Log the trigger for monitoring
-      console.log(`Lindy job search triggered for user ${userId}`, {
-        searchContext,
-        preferredJobTypes: preferences.preferredJobTypes,
-        preferredLocations: preferences.preferredLocations
+      // Log the trigger for monitoring without exposing PII
+      logger.info("Lindy job search triggered", {
+        userId,
+        operation: 'lindy_job_search_trigger',
+        hasSearchContext: !!searchContext,
+        jobTypesCount: preferences.preferredJobTypes?.length || 0,
+        locationsCount: preferences.preferredLocations?.length || 0,
+        hasSchedulePreference: !!preferences.schedulePreference
       });
 
       // Return user context for Lindy to use in job search
@@ -956,7 +1101,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: "Job search triggered successfully"
       });
     } catch (error) {
-      console.error("Error triggering Lindy job search:", error);
+      logger.error("Error triggering Lindy job search", error, { operation: 'lindy_job_search_trigger_get' });
       res.status(500).json({ message: "Failed to trigger job search" });
     }
   });
@@ -1006,11 +1151,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
 
         if (!response.ok) {
-          console.error('Failed to trigger Lindy webhook:', response.status, response.statusText);
+          logger.error('Failed to trigger Lindy webhook', null, { operation: 'lindy_webhook', status: response.status, statusText: response.statusText });
           return res.status(500).json({ message: "Failed to trigger Lindy job search" });
         }
 
-        console.log(`Lindy job search triggered for user ${userId}`);
+        logger.info('Lindy job search triggered successfully', { operation: 'lindy_webhook', userId });
         res.json({ 
           success: true, 
           message: "Lindy job search triggered successfully",
@@ -1018,7 +1163,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       } else {
         // If no Lindy webhook URL configured, just log the request
-        console.log('Lindy webhook URL not configured. Job search request:', lindyPayload);
+        logger.warn('Lindy webhook URL not configured', { operation: 'lindy_webhook', hasPayload: !!lindyPayload });
         res.json({ 
           success: true, 
           message: "Job search request logged (Lindy webhook URL not configured)",
@@ -1026,7 +1171,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
     } catch (error) {
-      console.error("Error triggering Lindy job search:", error);
+      logger.error("Error triggering Lindy job search", error, { operation: 'lindy_job_search_trigger_post' });
       res.status(500).json({ message: "Failed to trigger Lindy job search" });
     }
   });
@@ -1066,7 +1211,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await jobMatchingService.processAllUserNotifications();
       res.json({ success: true, message: "Job notifications processed" });
     } catch (error) {
-      console.error("Error processing job notifications:", error);
+      logger.error("Error processing job notifications", error, { operation: 'process_job_notifications' });
       res.status(500).json({ message: "Failed to process job notifications" });
     }
   });
@@ -1077,7 +1222,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await jobMatchingService.processAllUserNotifications();
       res.json({ success: true, message: "Test job notifications processed" });
     } catch (error) {
-      console.error("Error processing test job notifications:", error);
+      logger.error("Error processing test job notifications", error, { operation: 'test_job_notifications' });
       res.status(500).json({ message: "Failed to process test job notifications" });
     }
   });
@@ -1089,7 +1234,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const matchingJobs = await jobMatchingService.findMatchingJobsForUser(userId);
       res.json(matchingJobs);
     } catch (error) {
-      console.error("Error getting personalized jobs:", error);
+      logger.error("Error getting personalized jobs", error, { operation: 'get_personalized_jobs' });
       res.status(500).json({ message: "Failed to get personalized jobs" });
     }
   });
@@ -1106,7 +1251,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         timestamp: new Date().toISOString()
       });
     } catch (error) {
-      console.error("Error checking scanner status:", error);
+      logger.error("Error checking scanner status", error, { operation: 'check_scanner_status' });
       res.status(500).json({ 
         message: "Failed to check scanner status", 
         error: error instanceof Error ? error.message : "Unknown error"
@@ -1116,7 +1261,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Setup scheduled job notifications (runs daily at 9 AM)
   cron.schedule("0 9 * * *", async () => {
-    console.log("Running scheduled job notifications...");
+    logger.info("Running scheduled job notifications", { operation: 'cron_job_notifications', scheduler: 'node-cron' });
     await jobMatchingService.processAllUserNotifications();
   });
 

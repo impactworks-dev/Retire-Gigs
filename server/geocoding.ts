@@ -1,4 +1,6 @@
 // Geocoding utilities for converting addresses to GPS coordinates
+import { logger } from "./logger";
+
 export interface GeocodeResult {
   latitude: string;
   longitude: string;
@@ -12,21 +14,33 @@ export async function geocodeAddress(address: {
   state?: string | null;
   zipCode?: string | null;
 }): Promise<GeocodeResult | null> {
+  const startTime = Date.now();
+  
+  // Build the search query from address components (outside try block for catch block access)
+  const parts = [
+    address.streetAddress,
+    address.city,
+    address.state,
+    address.zipCode
+  ].filter(Boolean);
+  
   try {
-    // Build the search query from address components
-    const parts = [
-      address.streetAddress,
-      address.city,
-      address.state,
-      address.zipCode
-    ].filter(Boolean);
     
     if (parts.length === 0) {
+      logger.geocodeLog("Geocoding skipped - no address components provided", 'none');
       return null;
     }
     
     const searchQuery = parts.join(', ');
-    console.log("Geocoding address:", searchQuery);
+    
+    // Log geocoding attempt without exposing PII
+    logger.geocodeLog("Starting geocoding request", parts.length > 2 ? 'full' : 'partial', {
+      componentCount: parts.length,
+      hasStreetAddress: !!address.streetAddress,
+      hasCity: !!address.city,
+      hasState: !!address.state,
+      hasZipCode: !!address.zipCode
+    });
     
     // Use Nominatim (free OpenStreetMap geocoding service)
     const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&limit=1&countrycodes=us`;
@@ -38,18 +52,38 @@ export async function geocodeAddress(address: {
     });
     
     if (!response.ok) {
-      console.error("Geocoding API error:", response.status, response.statusText);
+      const duration = Date.now() - startTime;
+      logger.error("Geocoding API request failed", null, {
+        operation: 'geocoding',
+        duration,
+        status: response.status,
+        statusText: response.statusText,
+        service: 'nominatim'
+      });
       return null;
     }
     
     const data = await response.json();
     
     if (!data || data.length === 0) {
-      console.log("No geocoding results found for:", searchQuery);
+      const duration = Date.now() - startTime;
+      logger.geocodeLog("No geocoding results found", parts.length > 2 ? 'full' : 'partial', {
+        operation: 'geocoding',
+        duration,
+        componentCount: parts.length,
+        service: 'nominatim'
+      });
       return null;
     }
     
     const result = data[0];
+    const duration = Date.now() - startTime;
+    
+    logger.performance('geocoding', duration, true, {
+      service: 'nominatim',
+      resultCount: data.length,
+      hasFormattedAddress: !!result.display_name
+    });
     
     return {
       latitude: result.lat,
@@ -58,7 +92,13 @@ export async function geocodeAddress(address: {
     };
     
   } catch (error) {
-    console.error("Error geocoding address:", error);
+    const duration = Date.now() - startTime;
+    logger.error("Geocoding request failed", error, {
+      operation: 'geocoding',
+      duration,
+      service: 'nominatim',
+      componentCount: parts.length
+    });
     return null;
   }
 }
