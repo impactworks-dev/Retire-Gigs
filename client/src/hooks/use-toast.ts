@@ -6,13 +6,16 @@ import type {
 } from "@/components/ui/toast"
 
 const TOAST_LIMIT = 1
-const TOAST_REMOVE_DELAY = 1000000
+const DEFAULT_TOAST_DURATION = 5000 // 5 seconds for default messages
+const SUCCESS_TOAST_DURATION = 4000 // 4 seconds for success messages
+const ERROR_TOAST_DURATION = 7000 // 7 seconds for error messages
 
 type ToasterToast = ToastProps & {
   id: string
   title?: React.ReactNode
   description?: React.ReactNode
   action?: ToastActionElement
+  duration?: number
 }
 
 const actionTypes = {
@@ -55,7 +58,7 @@ interface State {
 
 const toastTimeouts = new Map<string, ReturnType<typeof setTimeout>>()
 
-const addToRemoveQueue = (toastId: string) => {
+const addToRemoveQueue = (toastId: string, duration: number = DEFAULT_TOAST_DURATION) => {
   if (toastTimeouts.has(toastId)) {
     return
   }
@@ -66,7 +69,7 @@ const addToRemoveQueue = (toastId: string) => {
       type: "REMOVE_TOAST",
       toastId: toastId,
     })
-  }, TOAST_REMOVE_DELAY)
+  }, duration)
 
   toastTimeouts.set(toastId, timeout)
 }
@@ -93,10 +96,11 @@ export const reducer = (state: State, action: Action): State => {
       // ! Side effects ! - This could be extracted into a dismissToast() action,
       // but I'll keep it here for simplicity
       if (toastId) {
-        addToRemoveQueue(toastId)
+        const toast = state.toasts.find(t => t.id === toastId)
+        addToRemoveQueue(toastId, toast?.duration)
       } else {
         state.toasts.forEach((toast) => {
-          addToRemoveQueue(toast.id)
+          addToRemoveQueue(toast.id, toast.duration)
         })
       }
 
@@ -139,8 +143,20 @@ function dispatch(action: Action) {
 
 type Toast = Omit<ToasterToast, "id">
 
-function toast({ ...props }: Toast) {
+function toast({ duration, variant, ...props }: Toast) {
   const id = genId()
+
+  // Auto-determine duration based on variant if not provided
+  let finalDuration = duration
+  if (!finalDuration) {
+    if (variant === "destructive") {
+      finalDuration = ERROR_TOAST_DURATION
+    } else if (variant === "default") {
+      finalDuration = SUCCESS_TOAST_DURATION
+    } else {
+      finalDuration = DEFAULT_TOAST_DURATION
+    }
+  }
 
   const update = (props: ToasterToast) =>
     dispatch({
@@ -153,6 +169,8 @@ function toast({ ...props }: Toast) {
     type: "ADD_TOAST",
     toast: {
       ...props,
+      variant,
+      duration: finalDuration,
       id,
       open: true,
       onOpenChange: (open) => {
@@ -166,6 +184,19 @@ function toast({ ...props }: Toast) {
     dismiss,
     update,
   }
+}
+
+// Helper functions for common toast types
+toast.success = (props: Omit<Toast, "variant">) => {
+  return toast({ ...props, variant: "default", duration: SUCCESS_TOAST_DURATION })
+}
+
+toast.error = (props: Omit<Toast, "variant">) => {
+  return toast({ ...props, variant: "destructive", duration: ERROR_TOAST_DURATION })
+}
+
+toast.info = (props: Omit<Toast, "variant">) => {
+  return toast({ ...props, variant: "default", duration: DEFAULT_TOAST_DURATION })
 }
 
 function useToast() {

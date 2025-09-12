@@ -1,10 +1,15 @@
-const CACHE_NAME = 'retiree-gigs-v1';
+const CACHE_NAME = 'retiree-gigs-v2';
 const urlsToCache = [
   '/',
-  '/static/js/bundle.js',
-  '/static/css/main.css',
+  '/offline.html',
   '/manifest.json',
+  '/icons/icon-72x72.png',
+  '/icons/icon-96x96.png',
+  '/icons/icon-128x128.png',
+  '/icons/icon-144x144.png',
+  '/icons/icon-152x152.png',
   '/icons/icon-192x192.png',
+  '/icons/icon-384x384.png',
   '/icons/icon-512x512.png'
 ];
 
@@ -14,21 +19,41 @@ self.addEventListener('install', (event) => {
     caches.open(CACHE_NAME)
       .then((cache) => {
         console.log('Opened cache');
-        return cache.addAll(urlsToCache);
+        return cache.addAll(urlsToCache.filter(url => url !== '/'));
+      })
+      .then(() => {
+        // Cache the root separately to handle it gracefully
+        return caches.open(CACHE_NAME).then(cache => {
+          return fetch('/').then(response => {
+            if (response.ok) {
+              return cache.put('/', response);
+            }
+          }).catch(error => {
+            console.log('Could not cache root in development:', error);
+          });
+        });
       })
       .catch((error) => {
         console.log('Cache install failed:', error);
       })
   );
+  // Force waiting service worker to become active
+  self.skipWaiting();
 });
 
 // Fetch event - serve cached content when offline
 self.addEventListener('fetch', (event) => {
+  // Skip non-GET requests and chrome-extension requests
+  if (event.request.method !== 'GET' || event.request.url.startsWith('chrome-extension://')) {
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request)
       .then((response) => {
         // Return cached version or fetch from network
         if (response) {
+          console.log('Serving from cache:', event.request.url);
           return response;
         }
         
@@ -44,17 +69,27 @@ self.addEventListener('fetch', (event) => {
           // Clone the response because it's a stream
           const responseToCache = response.clone();
           
+          // Cache successful responses for future use
           caches.open(CACHE_NAME)
             .then((cache) => {
               cache.put(event.request, responseToCache);
-            });
+            })
+            .catch(error => console.log('Cache put failed:', error));
           
           return response;
-        }).catch(() => {
+        }).catch((error) => {
+          console.log('Fetch failed, serving offline page:', error);
           // Return offline page for navigation requests
           if (event.request.mode === 'navigate') {
-            return caches.match('/offline.html');
+            return caches.match('/offline.html').then(offlineResponse => {
+              return offlineResponse || new Response(
+                '<!DOCTYPE html><html><head><title>Offline</title></head><body><h1>You are offline</h1><p>Please check your internet connection and try again.</p></body></html>',
+                { headers: { 'Content-Type': 'text/html' } }
+              );
+            });
           }
+          // For other requests, just fail
+          return new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
         });
       })
   );
@@ -62,17 +97,23 @@ self.addEventListener('fetch', (event) => {
 
 // Activate event - clean up old caches
 self.addEventListener('activate', (event) => {
+  console.log('Service worker activated');
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
-            console.log('Deleting old cache:', cacheName);
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    })
+    Promise.all([
+      // Clean up old caches
+      caches.keys().then((cacheNames) => {
+        return Promise.all(
+          cacheNames.map((cacheName) => {
+            if (cacheName !== CACHE_NAME) {
+              console.log('Deleting old cache:', cacheName);
+              return caches.delete(cacheName);
+            }
+          })
+        );
+      }),
+      // Take control of all clients immediately
+      self.clients.claim()
+    ])
   );
 });
 
