@@ -36,13 +36,11 @@ export const achievementsArraySchema = z.array(achievementSchema);
 
 // SECURITY: Add validation schemas for user preferences and questionnaire responses
 export const jobTypeSchema = z.enum([
-  "outdoorwork", "deskwork", "physicalwork", "customerservice", 
-  "sales", "healthcare", "education", "retail", "hospitality", 
-  "technology", "administrative", "creative", "management", "other"
+  "hands-on", "outdoor", "creative", "helping", "social", "quiet", "tech", "professional"
 ], { message: "Invalid job type" });
 
 export const locationPreferenceSchema = z.enum([
-  "remote", "closetohome", "willingtocommute", "willingtorelocate", "hybrid"
+  "remote", "closetohome", "anywhere", "flexible"
 ], { message: "Invalid location preference" });
 
 export const schedulePreferenceSchema = z.enum([
