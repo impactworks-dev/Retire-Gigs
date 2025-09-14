@@ -814,6 +814,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // User Job Scraping Endpoints
+
+  // Allow authenticated users to trigger job scraping for their own account
+  app.post("/api/jobs/scrape", strictRateLimit, isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      
+      logger.info("User triggered job scraping for themselves", {
+        operation: 'user_scrape_jobs',
+        userId
+      });
+
+      // Check if job scraper service is available
+      if (!jobScraperService.isServiceAvailable()) {
+        return res.status(503).json({
+          message: "Job scraper service not available - Firecrawl API key not configured"
+        });
+      }
+
+      // Start the job scraping for this specific user
+      const result = await jobScraperService.scrapeJobsForUser(userId);
+
+      logger.info("Job scraping completed for user", {
+        operation: 'user_scrape_jobs',
+        userId,
+        scrapedCount: result.scrapedCount,
+        savedCount: result.savedCount,
+        skippedCount: result.skippedCount,
+        errorCount: result.errors.length
+      });
+
+      res.json({
+        success: true,
+        message: "Job scraping completed successfully",
+        result: {
+          scrapedCount: result.scrapedCount,
+          savedCount: result.savedCount,
+          skippedCount: result.skippedCount,
+          errors: result.errors.slice(0, 5) // Return first 5 errors
+        }
+      });
+    } catch (error) {
+      logger.error("Error in user job scraping", error, {
+        operation: 'user_scrape_jobs',
+        userId: req.user?.claims?.sub
+      });
+      res.status(500).json({
+        message: "Failed to complete job scraping",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
   // Job Scraper Admin Endpoints
 
   // Trigger job scraping for all users
