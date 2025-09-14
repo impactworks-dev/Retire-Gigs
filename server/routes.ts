@@ -25,6 +25,8 @@ import { jobMatchingService } from "./jobMatchingService";
 import { ZodError } from "zod";
 import { malwareScannerService } from "./malwareScanner";
 import { logger } from "./logger";
+import { firecrawlService } from "./services/firecrawl";
+import { jobScraperService } from "./services/jobScraper";
 import { drizzle } from "drizzle-orm/neon-serverless";
 import { neon } from "@neondatabase/serverless";
 import path from "path";
@@ -737,6 +739,281 @@ export async function registerRoutes(app: Express): Promise<Server> {
       logger.error("Error sending test SMS", error, { operation: 'test_sms', service: 'twilio' });
       res.status(500).json({ 
         message: "Failed to send test SMS", 
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Test Firecrawl endpoint
+  app.post("/api/test-firecrawl", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      // Test Firecrawl service configuration and connection
+      const isConfigured = firecrawlService.isConfigured();
+      
+      if (!isConfigured) {
+        return res.status(500).json({ 
+          message: "Firecrawl service not configured - FIRECRAWL_API_KEY missing" 
+        });
+      }
+
+      // Test API connection
+      const connectionTest = await firecrawlService.testConnection();
+      
+      if (!connectionTest) {
+        return res.status(500).json({ 
+          message: "Firecrawl API connection test failed" 
+        });
+      }
+
+      // Test job scraping with small sample
+      const testOptions = {
+        location: "Remote",
+        jobType: "part-time",
+        maxResults: 3
+      };
+
+      logger.info("Testing Firecrawl service with sample scraping", { 
+        operation: 'test_firecrawl',
+        options: testOptions
+      });
+
+      // Test Indeed scraping (just a small sample)
+      const indeedJobs = await firecrawlService.scrapeIndeedJobs(testOptions);
+      
+      const response = {
+        success: true,
+        message: "Firecrawl service test completed successfully",
+        data: {
+          configured: isConfigured,
+          connectionTest: connectionTest,
+          sampleJobs: {
+            indeed: {
+              count: indeedJobs.length,
+              jobs: indeedJobs.slice(0, 2) // Return first 2 jobs as sample
+            }
+          }
+        }
+      };
+
+      logger.info("Firecrawl test completed successfully", { 
+        operation: 'test_firecrawl',
+        jobCount: indeedJobs.length,
+        success: true
+      });
+
+      res.json(response);
+    } catch (error) {
+      logger.error("Error testing Firecrawl service", error, { operation: 'test_firecrawl' });
+      res.status(500).json({ 
+        message: "Failed to test Firecrawl service", 
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Job Scraper Admin Endpoints
+
+  // Trigger job scraping for all users
+  app.post("/api/admin/scrape-jobs", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      logger.info("Admin triggered job scraping for all users", {
+        operation: 'admin_scrape_jobs_all',
+        adminUserId: req.user?.claims?.sub || 'unknown'
+      });
+
+      // Check if job scraper service is available
+      if (!jobScraperService.isServiceAvailable()) {
+        return res.status(500).json({
+          message: "Job scraper service not available - Firecrawl API key not configured"
+        });
+      }
+
+      // Start the job scraping session
+      const session = await jobScraperService.scrapeJobsForAllUsers();
+
+      logger.info("Job scraping session completed for all users", {
+        operation: 'admin_scrape_jobs_all',
+        sessionId: session.sessionId,
+        totalUsers: session.totalUsers,
+        processedUsers: session.processedUsers,
+        totalJobsScraped: session.totalJobsScraped,
+        totalJobsSaved: session.totalJobsSaved,
+        errorCount: session.errors.length
+      });
+
+      res.json({
+        success: true,
+        message: "Job scraping completed for all users",
+        session: {
+          sessionId: session.sessionId,
+          startTime: session.startTime,
+          totalUsers: session.totalUsers,
+          processedUsers: session.processedUsers,
+          totalJobsScraped: session.totalJobsScraped,
+          totalJobsSaved: session.totalJobsSaved,
+          totalJobsSkipped: session.totalJobsSkipped,
+          errorCount: session.errors.length,
+          errors: session.errors.slice(0, 10) // Return first 10 errors
+        }
+      });
+    } catch (error) {
+      logger.error("Error in admin job scraping for all users", error, {
+        operation: 'admin_scrape_jobs_all'
+      });
+      res.status(500).json({
+        message: "Failed to complete job scraping",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Trigger job scraping for specific user
+  app.post("/api/admin/scrape-jobs/:userId", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { userId } = req.params;
+
+      logger.info("Admin triggered job scraping for specific user", {
+        operation: 'admin_scrape_jobs_user',
+        targetUserId: userId,
+        adminUserId: req.user?.claims?.sub || 'unknown'
+      });
+
+      // Check if job scraper service is available
+      if (!jobScraperService.isServiceAvailable()) {
+        return res.status(500).json({
+          message: "Job scraper service not available - Firecrawl API key not configured"
+        });
+      }
+
+      // Scrape jobs for the specific user
+      const result = await jobScraperService.scrapeJobsForUser(userId);
+
+      logger.info("Job scraping completed for specific user", {
+        operation: 'admin_scrape_jobs_user',
+        targetUserId: userId,
+        scrapedCount: result.scrapedCount,
+        savedCount: result.savedCount,
+        skippedCount: result.skippedCount,
+        errorCount: result.errors.length
+      });
+
+      res.json({
+        success: true,
+        message: `Job scraping completed for user ${userId}`,
+        result: {
+          userId: result.userId,
+          scrapedCount: result.scrapedCount,
+          savedCount: result.savedCount,
+          skippedCount: result.skippedCount,
+          errorCount: result.errors.length,
+          errors: result.errors
+        }
+      });
+    } catch (error) {
+      logger.error("Error in admin job scraping for specific user", error, {
+        operation: 'admin_scrape_jobs_user',
+        targetUserId: req.params.userId
+      });
+      res.status(500).json({
+        message: "Failed to complete job scraping for user",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Get current job scraping session status
+  app.get("/api/admin/scraper-status", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const currentSession = jobScraperService.getCurrentSession();
+      const isServiceAvailable = jobScraperService.isServiceAvailable();
+
+      logger.info("Admin requested job scraper status", {
+        operation: 'admin_scraper_status',
+        adminUserId: (req as any).user?.claims?.sub || 'unknown',
+        hasActiveSession: !!currentSession,
+        serviceAvailable: isServiceAvailable
+      });
+
+      res.json({
+        serviceAvailable: isServiceAvailable,
+        firecrawlConfigured: firecrawlService.isConfigured(),
+        currentSession: currentSession ? {
+          sessionId: currentSession.sessionId,
+          startTime: currentSession.startTime,
+          totalUsers: currentSession.totalUsers,
+          processedUsers: currentSession.processedUsers,
+          totalJobsScraped: currentSession.totalJobsScraped,
+          totalJobsSaved: currentSession.totalJobsSaved,
+          totalJobsSkipped: currentSession.totalJobsSkipped,
+          errorCount: currentSession.errors.length,
+          isComplete: currentSession.processedUsers >= currentSession.totalUsers
+        } : null,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      logger.error("Error getting job scraper status", error, {
+        operation: 'admin_scraper_status'
+      });
+      res.status(500).json({
+        message: "Failed to get scraper status",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Test job scraping pipeline for a specific user
+  app.post("/api/admin/test-scraper/:userId", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      const { userId } = req.params;
+
+      logger.info("Admin testing job scraper for specific user", {
+        operation: 'admin_test_scraper',
+        targetUserId: userId,
+        adminUserId: req.user?.claims?.sub || 'unknown'
+      });
+
+      // Check if job scraper service is available
+      if (!jobScraperService.isServiceAvailable()) {
+        return res.status(500).json({
+          message: "Job scraper service not available - Firecrawl API key not configured"
+        });
+      }
+
+      // Test the job scraping pipeline
+      const result = await jobScraperService.testJobScrapingForUser(userId);
+
+      logger.info("Job scraper test completed for user", {
+        operation: 'admin_test_scraper',
+        targetUserId: userId,
+        success: result.errors.length === 0,
+        scrapedCount: result.scrapedCount,
+        savedCount: result.savedCount,
+        errorCount: result.errors.length
+      });
+
+      res.json({
+        success: result.errors.length === 0,
+        message: `Job scraper test completed for user ${userId}`,
+        result: {
+          userId: result.userId,
+          scrapedCount: result.scrapedCount,
+          savedCount: result.savedCount,
+          skippedCount: result.skippedCount,
+          errorCount: result.errors.length,
+          errors: result.errors,
+          testPassed: result.errors.length === 0,
+          details: result.errors.length > 0 
+            ? "Test failed - see errors for details"
+            : "Test passed - job scraping pipeline is working correctly"
+        }
+      });
+    } catch (error) {
+      logger.error("Error testing job scraper for user", error, {
+        operation: 'admin_test_scraper',
+        targetUserId: req.params.userId
+      });
+      res.status(500).json({
+        message: "Failed to test job scraper",
         error: error instanceof Error ? error.message : "Unknown error"
       });
     }
