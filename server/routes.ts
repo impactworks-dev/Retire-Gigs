@@ -1002,7 +1002,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Middleware for Lindy AI authentication
+  // Middleware for external service authentication (Lindy/Firecrawl)
+  const authenticateExternalService = (req: any, res: any, next: any) => {
+    const apiKey = req.headers['x-api-key'] || req.headers['authorization']?.replace('Bearer ', '');
+    
+    if (!apiKey || apiKey !== process.env.EXTERNAL_API_KEY) {
+      return res.status(401).json({ message: "Unauthorized - Invalid API key" });
+    }
+    next();
+  };
+
+  // Lindy authentication - strict access for Lindy service only
   const authenticateLindy = (req: any, res: any, next: any) => {
     const apiKey = req.headers['x-api-key'] || req.headers['authorization']?.replace('Bearer ', '');
     
@@ -1011,6 +1021,97 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     next();
   };
+
+  // External Services: Get user preferences with pagination for job scraping services
+  app.get("/api/admin/users/preferences", authenticateExternalService, async (req, res) => {
+    try {
+      const offset = parseInt(req.query.offset as string) || 0;
+      const limit = parseInt(req.query.limit as string) || 1;
+      
+      // Validate pagination parameters
+      if (limit > 50) {
+        return res.status(400).json({ message: "Limit cannot exceed 50 users per request" });
+      }
+      
+      if (offset < 0 || limit < 1) {
+        return res.status(400).json({ message: "Invalid pagination parameters" });
+      }
+
+      // Get users with preferences using optimized storage method (avoids N+1 queries)
+      const { users: rawUsersWithPrefs, total } = await storage.getUsersWithPreferences(offset, limit);
+      
+      if (rawUsersWithPrefs.length === 0) {
+        return res.json({
+          users: [],
+          pagination: {
+            offset,
+            limit,
+            total,
+            hasMore: false
+          }
+        });
+      }
+
+      // Transform data and minimize PII exposure
+      const usersWithPreferences = rawUsersWithPrefs.map(({ user, preferences }) => {
+        // Round coordinates to ~1km precision for privacy (3 decimal places)
+        const roundedLat = user.latitude ? Math.round(parseFloat(user.latitude) * 1000) / 1000 : null;
+        const roundedLng = user.longitude ? Math.round(parseFloat(user.longitude) * 1000) / 1000 : null;
+        
+        return {
+          userId: user.id,
+          userInfo: {
+            age: user.age,
+            // PII minimization: exclude email, phoneNumber, streetAddress
+            firstName: user.firstName,
+            lastName: user.lastName,
+            location: {
+              city: user.city,
+              state: user.state,
+              zipCode: user.zipCode,
+              // Rounded coordinates for privacy (~1km precision)
+              latitude: roundedLat?.toString(),
+              longitude: roundedLng?.toString()
+            }
+          },
+          preferences: preferences ? {
+            notificationsEnabled: preferences.notificationsEnabled,
+            smsNotificationsEnabled: preferences.smsNotificationsEnabled,
+            schedulePreference: preferences.schedulePreference,
+            preferredJobTypes: preferences.preferredJobTypes,
+            preferredLocations: preferences.preferredLocations
+          } : null,
+          hasCompletedPreferences: !!preferences
+        };
+      });
+
+      // Log request for monitoring (without exposing PII)
+      logger.info("External service accessed user preferences", {
+        operation: 'external_user_preferences_access',
+        offset,
+        limit,
+        usersReturned: usersWithPreferences.length,
+        totalUsers: total,
+        usersWithPreferences: usersWithPreferences.filter(u => u.hasCompletedPreferences).length
+      });
+
+      res.json({
+        users: usersWithPreferences,
+        pagination: {
+          offset,
+          limit,
+          total,
+          hasMore: offset + limit < total,
+          nextOffset: offset + limit < total ? offset + limit : null
+        }
+      });
+    } catch (error) {
+      logger.error("Failed to fetch user preferences for external service", error, {
+        operation: 'external_user_preferences_access'
+      });
+      res.status(500).json({ message: "Failed to fetch user preferences" });
+    }
+  });
 
   // Lindy AI: Get user preferences for job matching
   app.get("/api/lindy/user-preferences/:userId", authenticateLindy, async (req, res) => {

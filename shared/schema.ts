@@ -127,7 +127,7 @@ export const questionnaireResponses = pgTable("questionnaire_responses", {
 
 export const userPreferences = pgTable("user_preferences", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").references(() => users.id).notNull(),
+  userId: varchar("user_id").references(() => users.id).notNull().unique(), // Ensure one preferences record per user
   notificationsEnabled: boolean("notifications_enabled").default(true),
   smsNotificationsEnabled: boolean("sms_notifications_enabled").default(false),
   schedulePreference: text("schedule_preference").default("weekly"), // daily, weekly, biweekly

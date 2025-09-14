@@ -60,6 +60,7 @@ export interface IStorage {
   createUser(user: InsertUser): Promise<User>;
   getUser(userId: string): Promise<User | undefined>;
   getAllUsers(): Promise<User[]>;
+  getUsersWithPreferences(offset: number, limit: number): Promise<{ users: Array<{ user: User; preferences: UserPreferences | null }>; total: number }>;
   upsertUser(user: UpsertUser): Promise<User>;
 
   // Questionnaire operations
@@ -225,6 +226,25 @@ export class MemStorage implements IStorage {
     return Array.from(this.users.values());
   }
 
+  async getUsersWithPreferences(offset: number, limit: number): Promise<{ users: Array<{ user: User; preferences: UserPreferences | null }>; total: number }> {
+    const allUsers = Array.from(this.users.values());
+    const total = allUsers.length;
+    
+    // Apply pagination to users
+    const paginatedUsers = allUsers.slice(offset, offset + limit);
+    
+    // Get preferences for each paginated user
+    const usersWithPreferences = paginatedUsers.map(user => {
+      const preferences = Array.from(this.userPreferences.values()).find(
+        pref => pref.userId === user.id
+      ) || null;
+      
+      return { user, preferences };
+    });
+    
+    return { users: usersWithPreferences, total };
+  }
+
   async upsertUser(userData: UpsertUser): Promise<User> {
     const existingUser = this.users.get(userData.id!);
     const user: User = {
@@ -266,19 +286,42 @@ export class MemStorage implements IStorage {
   }
 
   async saveUserPreferences(preferences: InsertUserPreferences): Promise<UserPreferences> {
-    const id = randomUUID();
-    const userPreferences: UserPreferences = {
-      ...preferences,
-      id,
-      updatedAt: new Date(),
-      notificationsEnabled: preferences.notificationsEnabled ?? true,
-      smsNotificationsEnabled: preferences.smsNotificationsEnabled ?? false,
-      schedulePreference: preferences.schedulePreference || "weekly",
-      preferredJobTypes: preferences.preferredJobTypes || null,
-      preferredLocations: preferences.preferredLocations || null
-    };
-    this.userPreferences.set(id, userPreferences);
-    return userPreferences;
+    // Check if user already has preferences and update instead of creating duplicate
+    const existingPref = Array.from(this.userPreferences.values()).find(
+      pref => pref.userId === preferences.userId
+    );
+    
+    if (existingPref) {
+      // Update existing preferences
+      const updated: UserPreferences = {
+        ...existingPref,
+        ...preferences,
+        id: existingPref.id,
+        updatedAt: new Date(),
+        notificationsEnabled: preferences.notificationsEnabled ?? existingPref.notificationsEnabled,
+        smsNotificationsEnabled: preferences.smsNotificationsEnabled ?? existingPref.smsNotificationsEnabled,
+        schedulePreference: preferences.schedulePreference || existingPref.schedulePreference,
+        preferredJobTypes: preferences.preferredJobTypes ?? existingPref.preferredJobTypes,
+        preferredLocations: preferences.preferredLocations ?? existingPref.preferredLocations
+      };
+      this.userPreferences.set(existingPref.id, updated);
+      return updated;
+    } else {
+      // Create new preferences
+      const id = randomUUID();
+      const userPreferences: UserPreferences = {
+        ...preferences,
+        id,
+        updatedAt: new Date(),
+        notificationsEnabled: preferences.notificationsEnabled ?? true,
+        smsNotificationsEnabled: preferences.smsNotificationsEnabled ?? false,
+        schedulePreference: preferences.schedulePreference || "weekly",
+        preferredJobTypes: preferences.preferredJobTypes || null,
+        preferredLocations: preferences.preferredLocations || null
+      };
+      this.userPreferences.set(id, userPreferences);
+      return userPreferences;
+    }
   }
 
   async getUserPreferences(userId: string): Promise<UserPreferences | undefined> {
@@ -603,6 +646,35 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
+  async getUsersWithPreferences(offset: number, limit: number): Promise<{ users: Array<{ user: User; preferences: UserPreferences | null }>; total: number }> {
+    try {
+      // Get total count of users first
+      const totalResult = await db.select({ count: sql<number>`count(*)` }).from(users);
+      const total = Number(totalResult[0]?.count || 0); // Ensure total is a number
+      
+      // Get paginated users with their preferences using a left join
+      // The unique constraint on userId ensures no duplicate users
+      const usersWithPrefs = await db
+        .select({
+          user: users,
+          preferences: userPreferences
+        })
+        .from(users)
+        .leftJoin(userPreferences, eq(users.id, userPreferences.userId))
+        .limit(limit)
+        .offset(offset);
+      
+      const result = usersWithPrefs.map(row => ({
+        user: row.user,
+        preferences: row.preferences
+      }));
+      
+      return { users: result, total };
+    } catch (error: any) {
+      throw new Error(`Failed to get users with preferences: ${error.message}`);
+    }
+  }
+
   async upsertUser(userData: UpsertUser): Promise<User> {
     const [user] = await db
       .insert(users)
@@ -635,9 +707,21 @@ export class DatabaseStorage implements IStorage {
   }
 
   async saveUserPreferences(preferences: InsertUserPreferences): Promise<UserPreferences> {
+    // Use upsert to handle unique constraint on userId
     const [userPrefs] = await db
       .insert(userPreferences)
       .values(preferences)
+      .onConflictDoUpdate({
+        target: userPreferences.userId,
+        set: {
+          notificationsEnabled: preferences.notificationsEnabled,
+          smsNotificationsEnabled: preferences.smsNotificationsEnabled,
+          schedulePreference: preferences.schedulePreference,
+          preferredJobTypes: preferences.preferredJobTypes,
+          preferredLocations: preferences.preferredLocations,
+          updatedAt: new Date()
+        }
+      })
       .returning();
     return userPrefs;
   }
