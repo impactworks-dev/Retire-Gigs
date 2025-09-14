@@ -138,7 +138,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (process.env.DATABASE_URL) {
         const dbStartTime = Date.now();
         const sql = neon(process.env.DATABASE_URL);
-        const db = drizzle(sql);
         await sql('SELECT 1 as health_check');
         const dbDuration = Date.now() - dbStartTime;
         healthStatus.services.database = 'healthy';
@@ -282,7 +281,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(user);
     } catch (error) {
       logger.error("Failed to update user profile", error, {
-        userId,
+        userId: req.params.userId,
         operation: 'user_profile_update'
       });
       res.status(400).json({ message: "Failed to update profile" });
@@ -996,7 +995,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       logger.error("Failed to update resume with uploaded file", error, {
-        userId,
+        userId: req.user?.claims?.sub || 'unknown',
         operation: 'resume_file_update'
       });
       res.status(500).json({ message: "Internal server error" });
@@ -1082,8 +1081,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userId,
         operation: 'lindy_job_search_trigger',
         hasSearchContext: !!searchContext,
-        jobTypesCount: preferences.preferredJobTypes?.length || 0,
-        locationsCount: preferences.preferredLocations?.length || 0,
+        jobTypesCount: Array.isArray(preferences.preferredJobTypes) ? preferences.preferredJobTypes.length : 0,
+        locationsCount: Array.isArray(preferences.preferredLocations) ? preferences.preferredLocations.length : 0,
         hasSchedulePreference: !!preferences.schedulePreference
       });
 
