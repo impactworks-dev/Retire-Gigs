@@ -1,6 +1,8 @@
 import FirecrawlApp from '@mendable/firecrawl-js';
 import type { InsertJobOpportunity, JobOpportunity } from '@shared/schema';
 import { logger } from '../logger';
+import { DOMJobParser, type JobParsingResult } from './domJobParser';
+import { ContentSanitizer } from './contentSanitizer';
 
 // Use the official types from @mendable/firecrawl-js
 // No need for custom FirecrawlResponse interface
@@ -135,8 +137,38 @@ export class FirecrawlService {
         return [];
       }
 
-      const jobs = this.parseIndeedJobs(markdown, html);
-      logger.info(`Successfully scraped ${jobs.length} jobs from Indeed`);
+      const parsingResult = DOMJobParser.parseJobsFromHTML(html || '', markdown, 'indeed');
+      
+      logger.info('Indeed job parsing completed', {
+        operation: 'scrapeIndeedJobs',
+        parsed: parsingResult.parsed,
+        valid: parsingResult.valid,
+        invalid: parsingResult.invalid,
+        qualityScore: parsingResult.qualityScore,
+        errorCount: parsingResult.errors.length
+      });
+      
+      // Log any parsing issues for debugging
+      if (parsingResult.errors.length > 0) {
+        logger.warn('Indeed parsing errors', {
+          operation: 'scrapeIndeedJobs',
+          errors: parsingResult.errors.slice(0, 5) // Log first 5 errors
+        });
+      }
+      
+      // Convert sanitized jobs to ScrapedJobData format
+      const jobs = parsingResult.jobs.map(sanitizedJob => ({
+        title: sanitizedJob.title,
+        company: sanitizedJob.company,
+        location: sanitizedJob.location,
+        description: sanitizedJob.description,
+        pay: sanitizedJob.pay,
+        schedule: sanitizedJob.schedule,
+        url: undefined,
+        datePosted: new Date().toISOString().split('T')[0]
+      }));
+      
+      logger.info(`Successfully scraped ${jobs.length} valid jobs from Indeed (${parsingResult.qualityScore}% quality)`);
       
       return jobs.slice(0, maxResults);
     } catch (error) {
@@ -198,8 +230,38 @@ export class FirecrawlService {
         return [];
       }
 
-      const jobs = this.parseAARPJobs(markdown, html);
-      logger.info(`Successfully scraped ${jobs.length} jobs from AARP`);
+      const parsingResult = DOMJobParser.parseJobsFromHTML(html || '', markdown, 'aarp');
+      
+      logger.info('AARP job parsing completed', {
+        operation: 'scrapeAARPJobs',
+        parsed: parsingResult.parsed,
+        valid: parsingResult.valid,
+        invalid: parsingResult.invalid,
+        qualityScore: parsingResult.qualityScore,
+        errorCount: parsingResult.errors.length
+      });
+      
+      // Log any parsing issues for debugging
+      if (parsingResult.errors.length > 0) {
+        logger.warn('AARP parsing errors', {
+          operation: 'scrapeAARPJobs',
+          errors: parsingResult.errors.slice(0, 5) // Log first 5 errors
+        });
+      }
+      
+      // Convert sanitized jobs to ScrapedJobData format
+      const jobs = parsingResult.jobs.map(sanitizedJob => ({
+        title: sanitizedJob.title,
+        company: sanitizedJob.company,
+        location: sanitizedJob.location,
+        description: sanitizedJob.description,
+        pay: sanitizedJob.pay,
+        schedule: sanitizedJob.schedule,
+        url: undefined,
+        datePosted: new Date().toISOString().split('T')[0]
+      }));
+      
+      logger.info(`Successfully scraped ${jobs.length} valid jobs from AARP (${parsingResult.qualityScore}% quality)`);
       
       return jobs.slice(0, maxResults);
     } catch (error) {
@@ -262,8 +324,38 @@ export class FirecrawlService {
         return [];
       }
 
-      const jobs = this.parseUSAJobs(markdown, html);
-      logger.info(`Successfully scraped ${jobs.length} jobs from USAJobs`);
+      const parsingResult = DOMJobParser.parseJobsFromHTML(html || '', markdown, 'usajobs');
+      
+      logger.info('USAJobs job parsing completed', {
+        operation: 'scrapeUSAJobs',
+        parsed: parsingResult.parsed,
+        valid: parsingResult.valid,
+        invalid: parsingResult.invalid,
+        qualityScore: parsingResult.qualityScore,
+        errorCount: parsingResult.errors.length
+      });
+      
+      // Log any parsing issues for debugging
+      if (parsingResult.errors.length > 0) {
+        logger.warn('USAJobs parsing errors', {
+          operation: 'scrapeUSAJobs',
+          errors: parsingResult.errors.slice(0, 5) // Log first 5 errors
+        });
+      }
+      
+      // Convert sanitized jobs to ScrapedJobData format
+      const jobs = parsingResult.jobs.map(sanitizedJob => ({
+        title: sanitizedJob.title,
+        company: sanitizedJob.company,
+        location: sanitizedJob.location,
+        description: sanitizedJob.description,
+        pay: sanitizedJob.pay,
+        schedule: sanitizedJob.schedule,
+        url: undefined,
+        datePosted: new Date().toISOString().split('T')[0]
+      }));
+      
+      logger.info(`Successfully scraped ${jobs.length} valid jobs from USAJobs (${parsingResult.qualityScore}% quality)`);
       
       return jobs.slice(0, maxResults);
     } catch (error) {
@@ -272,172 +364,11 @@ export class FirecrawlService {
     }
   }
 
-  /**
-   * Parse Indeed job listings from markdown content
-   */
-  private parseIndeedJobs(markdown: string, html?: string): ScrapedJobData[] {
-    const jobs: ScrapedJobData[] = [];
-    
-    try {
-      // Indeed job listings pattern matching
-      // Look for job titles, companies, and other details in the markdown
-      const lines = markdown.split('\n');
-      let currentJob: Partial<ScrapedJobData> = {};
-      
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i].trim();
-        
-        // Skip empty lines
-        if (!line) continue;
-        
-        // Look for job titles (often in headers or bold)
-        if (line.includes('##') || line.includes('**')) {
-          // If we have a current job, save it
-          if (currentJob.title && currentJob.company) {
-            jobs.push(this.normalizeJobData(currentJob));
-            currentJob = {};
-          }
-          
-          // Extract title
-          const titleMatch = line.match(/#+\s*(.+)|^\*\*(.+)\*\*$/);
-          if (titleMatch) {
-            currentJob.title = (titleMatch[1] || titleMatch[2] || '').trim();
-          }
-        }
-        
-        // Look for company names (usually follow titles)
-        if (currentJob.title && !currentJob.company) {
-          // Company names are often on the next line after title
-          const companyMatch = line.match(/^([A-Za-z0-9\s&.,'-]+)$/);
-          if (companyMatch && !line.includes('$') && !line.includes('remote')) {
-            currentJob.company = (companyMatch[1] || '').trim();
-          }
-        }
-        
-        // Look for location information
-        if (line.includes('remote') || line.includes('Remote')) {
-          currentJob.location = 'Remote';
-        } else if (line.match(/[A-Za-z]+,\s*[A-Z]{2}/)) {
-          // City, State format
-          currentJob.location = line;
-        }
-        
-        // Look for pay information
-        if (line.includes('$') || line.includes('hour') || line.includes('salary')) {
-          currentJob.pay = line;
-        }
-        
-        // Look for job description snippets
-        if (line.length > 50 && !currentJob.description) {
-          currentJob.description = line;
-        }
-      }
-      
-      // Don't forget the last job
-      if (currentJob.title && currentJob.company) {
-        jobs.push(this.normalizeJobData(currentJob));
-      }
-      
-    } catch (error) {
-      logger.error('Error parsing Indeed jobs', error);
-    }
-    
-    return jobs;
-  }
+// Old parseIndeedJobs method removed - now using DOMJobParser
 
-  /**
-   * Parse AARP job listings from markdown content
-   */
-  private parseAARPJobs(markdown: string, html?: string): ScrapedJobData[] {
-    const jobs: ScrapedJobData[] = [];
-    
-    try {
-      // Similar parsing logic for AARP jobs
-      const lines = markdown.split('\n');
-      let currentJob: Partial<ScrapedJobData> = {};
-      
-      for (const line of lines) {
-        const trimmedLine = line.trim();
-        if (!trimmedLine) continue;
-        
-        // AARP-specific parsing patterns
-        if (trimmedLine.includes('##') || trimmedLine.includes('**')) {
-          if (currentJob.title && currentJob.company) {
-            jobs.push(this.normalizeJobData(currentJob));
-            currentJob = {};
-          }
-          
-          const titleMatch = trimmedLine.match(/#+\s*(.+)|^\*\*(.+)\*\*$/);
-          if (titleMatch) {
-            currentJob.title = (titleMatch[1] || titleMatch[2] || '').trim();
-          }
-        }
-        
-        // Continue with similar pattern matching...
-        // (Implementation would be similar to Indeed parsing)
-      }
-      
-      if (currentJob.title && currentJob.company) {
-        jobs.push(this.normalizeJobData(currentJob));
-      }
-      
-    } catch (error) {
-      logger.error('Error parsing AARP jobs', error);
-    }
-    
-    return jobs;
-  }
+// Old parseAARPJobs method removed - now using DOMJobParser
 
-  /**
-   * Parse USAJobs listings from markdown content
-   */
-  private parseUSAJobs(markdown: string, html?: string): ScrapedJobData[] {
-    const jobs: ScrapedJobData[] = [];
-    
-    try {
-      // USAJobs-specific parsing logic
-      const lines = markdown.split('\n');
-      let currentJob: Partial<ScrapedJobData> = {};
-      
-      for (const line of lines) {
-        const trimmedLine = line.trim();
-        if (!trimmedLine) continue;
-        
-        // Government job parsing patterns
-        if (trimmedLine.includes('##') || trimmedLine.includes('**')) {
-          if (currentJob.title && currentJob.company) {
-            jobs.push(this.normalizeJobData(currentJob));
-            currentJob = {};
-          }
-          
-          const titleMatch = trimmedLine.match(/#+\s*(.+)|^\*\*(.+)\*\*$/);
-          if (titleMatch) {
-            currentJob.title = (titleMatch[1] || titleMatch[2] || '').trim();
-            currentJob.company = 'U.S. Government'; // Default for USAJobs
-          }
-        }
-        
-        // Look for agency/department information
-        if (trimmedLine.includes('Department') || trimmedLine.includes('Agency')) {
-          currentJob.company = trimmedLine;
-        }
-        
-        // Government pay grades (GS-XX patterns)
-        if (trimmedLine.match(/GS-\d+/)) {
-          currentJob.pay = trimmedLine;
-        }
-      }
-      
-      if (currentJob.title && currentJob.company) {
-        jobs.push(this.normalizeJobData(currentJob));
-      }
-      
-    } catch (error) {
-      logger.error('Error parsing USAJobs', error);
-    }
-    
-    return jobs;
-  }
+// Old parseUSAJobs method removed - now using DOMJobParser
 
   /**
    * Normalize scraped job data to match our schema

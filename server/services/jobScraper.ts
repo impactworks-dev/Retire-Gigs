@@ -3,6 +3,8 @@ import { storage } from '../storage';
 import { logger } from '../logger';
 import type { User, UserPreferences, InsertJobOpportunity, JobOpportunity } from '@shared/schema';
 import { randomUUID } from 'crypto';
+import { QualityMetricsTracker, type JobQualityMetrics } from './qualityMetrics';
+import { ContentSanitizer } from './contentSanitizer';
 
 interface UserWithPreferences {
   user: User;
@@ -244,11 +246,29 @@ export class JobScraperService {
         }
       }
 
-      // Process and save scraped jobs
+      // Process and save scraped jobs with quality tracking
       const processingResult = await this.processAndSaveJobs(allScrapedJobs, userId, preferences);
       result.savedCount = processingResult.savedCount;
       result.skippedCount = processingResult.skippedCount;
       result.errors.push(...processingResult.errors);
+      
+      // Record quality metrics for monitoring
+      const qualityScore = result.scrapedCount > 0 
+        ? Math.round((result.savedCount / result.scrapedCount) * 100)
+        : 0;
+      
+      QualityMetricsTracker.recordMetrics({
+        sessionId: randomUUID(),
+        timestamp: new Date(),
+        site: 'aggregated', // Combined from multiple sites
+        totalParsed: result.scrapedCount,
+        validJobs: result.savedCount,
+        invalidJobs: result.skippedCount,
+        qualityScore,
+        commonErrors: result.errors.slice(0, 5).map(error => ({ error, count: 1 })),
+        parsingMethod: 'DOM',
+        averageProcessingTime: 0 // Would need to measure this separately
+      });
 
       logger.info('Completed job scraping for user', {
         operation: 'scrapeJobsForUser',
