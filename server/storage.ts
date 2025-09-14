@@ -25,7 +25,7 @@ import {
   resumes,
   newsArticles
 } from "@shared/schema";
-import { db } from "./db";
+import { db, withDatabaseRetry } from "./db";
 import { eq, and, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
@@ -619,11 +619,13 @@ export class MemStorage implements IStorage {
 export class DatabaseStorage implements IStorage {
   async createUser(insertUser: InsertUser): Promise<User> {
     try {
-      const [user] = await db
-        .insert(users)
-        .values(insertUser)
-        .returning();
-      return user;
+      return await withDatabaseRetry(async () => {
+        const [user] = await db
+          .insert(users)
+          .values(insertUser)
+          .returning();
+        return user;
+      });
     } catch (error: any) {
       throw new Error(`Failed to create user: ${error.message}`);
     }
@@ -631,8 +633,10 @@ export class DatabaseStorage implements IStorage {
 
   async getUser(userId: string): Promise<User | undefined> {
     try {
-      const [user] = await db.select().from(users).where(eq(users.id, userId));
-      return user || undefined;
+      return await withDatabaseRetry(async () => {
+        const [user] = await db.select().from(users).where(eq(users.id, userId));
+        return user || undefined;
+      });
     } catch (error: any) {
       throw new Error(`Failed to get user: ${error.message}`);
     }
@@ -640,7 +644,9 @@ export class DatabaseStorage implements IStorage {
 
   async getAllUsers(): Promise<User[]> {
     try {
-      return await db.select().from(users);
+      return await withDatabaseRetry(async () => {
+        return await db.select().from(users);
+      });
     } catch (error: any) {
       throw new Error(`Failed to get all users: ${error.message}`);
     }
@@ -676,34 +682,40 @@ export class DatabaseStorage implements IStorage {
   }
 
   async upsertUser(userData: UpsertUser): Promise<User> {
-    const [user] = await db
-      .insert(users)
-      .values(userData)
-      .onConflictDoUpdate({
-        target: users.id,
-        set: {
-          ...userData,
-          updatedAt: new Date(),
-        },
-      })
-      .returning();
-    return user;
+    return await withDatabaseRetry(async () => {
+      const [user] = await db
+        .insert(users)
+        .values(userData)
+        .onConflictDoUpdate({
+          target: users.id,
+          set: {
+            ...userData,
+            updatedAt: new Date(),
+          },
+        })
+        .returning();
+      return user;
+    });
   }
 
   async saveQuestionnaireResponse(response: InsertQuestionnaireResponse): Promise<QuestionnaireResponse> {
-    const [questionnaireResponse] = await db
-      .insert(questionnaireResponses)
-      .values(response)
-      .returning();
-    return questionnaireResponse;
+    return await withDatabaseRetry(async () => {
+      const [questionnaireResponse] = await db
+        .insert(questionnaireResponses)
+        .values(response)
+        .returning();
+      return questionnaireResponse;
+    });
   }
 
   async getQuestionnaireResponse(userId: string): Promise<QuestionnaireResponse | undefined> {
-    const [response] = await db
-      .select()
-      .from(questionnaireResponses)
-      .where(eq(questionnaireResponses.userId, userId));
-    return response || undefined;
+    return await withDatabaseRetry(async () => {
+      const [response] = await db
+        .select()
+        .from(questionnaireResponses)
+        .where(eq(questionnaireResponses.userId, userId));
+      return response || undefined;
+    });
   }
 
   async saveUserPreferences(preferences: InsertUserPreferences): Promise<UserPreferences> {
@@ -749,10 +761,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getJobOpportunities(): Promise<JobOpportunity[]> {
-    return await db
-      .select()
-      .from(jobOpportunities)
-      .where(eq(jobOpportunities.isActive, true));
+    return await withDatabaseRetry(async () => {
+      return await db
+        .select()
+        .from(jobOpportunities)
+        .where(eq(jobOpportunities.isActive, true));
+    });
   }
 
   async getMatchingJobs(userId: string): Promise<JobOpportunity[]> {
