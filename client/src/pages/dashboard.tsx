@@ -125,7 +125,7 @@ export default function Dashboard() {
         <div className="max-w-6xl mx-auto px-6 py-8">
           <div className="text-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-            <p className="mt-4 text-gray-600">Loading your dashboard...</p>
+            <p className="mt-4 text-senior text-senior-secondary">Loading your dashboard...</p>
           </div>
         </div>
       </Layout>
@@ -156,7 +156,7 @@ export default function Dashboard() {
               <div className="flex-1 p-8 lg:p-12 text-white">
                 <div className="flex items-center mb-4">
                   <h1 
-                    className="text-3xl lg:text-4xl font-bold"
+                    className="mobile-heading lg:text-4xl font-bold"
                     data-testid="text-dashboard-welcome"
                   >
                     Welcome back, {authUser?.firstName || 'Friend'}!
@@ -164,7 +164,7 @@ export default function Dashboard() {
                   <Award className="w-8 h-8 ml-3 text-yellow-300" />
                 </div>
                 <p 
-                  className="text-xl mb-6 text-blue-100"
+                  className="text-senior-large lg:text-xl mb-6 text-blue-100"
                   data-testid="text-dashboard-subtitle"
                 >
                   Your personalized job matching platform for meaningful work opportunities
@@ -174,14 +174,14 @@ export default function Dashboard() {
                     <Button
                       variant="secondary"
                       size="lg"
-                      className="bg-white text-blue-600 hover:bg-blue-50"
+                      className="bg-white text-blue-600 hover:bg-blue-50 text-senior-button min-h-12 px-6 py-3"
                       data-testid="button-manage-profile"
                     >
                       <User className="w-5 h-5 mr-2" />
                       Manage Profile
                     </Button>
                   </Link>
-                  <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 text-lg px-4 py-2">
+                  <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 text-senior px-4 py-2">
                     <Star className="w-4 h-4 mr-1" />
                     Premium Member
                   </Badge>
@@ -206,15 +206,15 @@ export default function Dashboard() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600 mb-1">Total Opportunities</p>
-                  <p className="text-3xl font-bold text-gray-900" data-testid="metric-total-jobs">{jobs.length}</p>
+                  <p className="text-senior text-senior-secondary mb-1">Total Opportunities</p>
+                  <p className="text-4xl font-bold text-gray-900" data-testid="metric-total-jobs">{jobs.length}</p>
                 </div>
                 <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
                   <Briefcase className="w-6 h-6 text-blue-600" />
                 </div>
               </div>
-              <p className="text-sm text-green-600 mt-2 flex items-center">
-                <TrendingUp className="w-4 h-4 mr-1" />
+              <p className="text-senior text-green-600 mt-2 flex items-center">
+                <TrendingUp className="w-5 h-5 mr-2" />
                 +{recentJobs.length} this week
               </p>
             </CardContent>
@@ -224,14 +224,14 @@ export default function Dashboard() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600 mb-1">Great Matches</p>
-                  <p className="text-3xl font-bold text-gray-900" data-testid="metric-matches">{jobMatches.length}</p>
+                  <p className="text-senior text-senior-secondary mb-1">Great Matches</p>
+                  <p className="text-4xl font-bold text-gray-900" data-testid="metric-matches">{jobMatches.length}</p>
                 </div>
                 <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
                   <Target className="w-6 h-6 text-green-600" />
                 </div>
               </div>
-              <p className="text-sm text-blue-600 mt-2">
+              <p className="text-senior text-blue-600 mt-2">
                 {Math.round((jobMatches.length / Math.max(jobs.length, 1)) * 100)}% match rate
               </p>
             </CardContent>
@@ -241,14 +241,14 @@ export default function Dashboard() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600 mb-1">Average Pay</p>
-                  <p className="text-3xl font-bold text-gray-900" data-testid="metric-avg-pay">${Math.round(avgPay)}/hr</p>
+                  <p className="text-senior text-senior-secondary mb-1">Average Pay</p>
+                  <p className="text-4xl font-bold text-gray-900" data-testid="metric-avg-pay">${Math.round(avgPay)}/hr</p>
                 </div>
                 <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
                   <DollarSign className="w-6 h-6 text-yellow-600" />
                 </div>
               </div>
-              <p className="text-sm text-gray-600 mt-2">
+              <p className="text-senior text-senior-muted mt-2">
                 Range: $15-$20/hour
               </p>
             </CardContent>
@@ -258,15 +258,15 @@ export default function Dashboard() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600 mb-1">Profile Score</p>
-                  <p className="text-3xl font-bold text-gray-900" data-testid="metric-profile-score">92%</p>
+                  <p className="text-senior text-senior-secondary mb-1">Profile Score</p>
+                  <p className="text-4xl font-bold text-gray-900" data-testid="metric-profile-score">92%</p>
                 </div>
                 <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
                   <Activity className="w-6 h-6 text-purple-600" />
                 </div>
               </div>
-              <p className="text-sm text-green-600 mt-2 flex items-center">
-                <CheckCircle className="w-4 h-4 mr-1" />
+              <p className="text-senior text-green-600 mt-2 flex items-center">
+                <CheckCircle className="w-5 h-5 mr-2" />
                 Profile complete
               </p>
             </CardContent>
@@ -287,9 +287,9 @@ export default function Dashboard() {
               <div className="bg-green-50 rounded-lg p-4">
                 <div className="flex items-center mb-2">
                   <Users className="w-5 h-5 text-green-600 mr-2" />
-                  <h4 className="font-semibold text-green-900">Growing Demand</h4>
+                  <h4 className="text-senior-large font-bold text-green-900">Growing Demand</h4>
                 </div>
-                <p className="text-green-700 text-sm">
+                <p className="text-green-700 text-senior">
                   Senior-friendly positions have increased 34% this year. Companies are actively seeking experienced workers.
                 </p>
               </div>
@@ -297,9 +297,9 @@ export default function Dashboard() {
               <div className="bg-blue-50 rounded-lg p-4">
                 <div className="flex items-center mb-2">
                   <Clock className="w-5 h-5 text-blue-600 mr-2" />
-                  <h4 className="font-semibold text-blue-900">Flexible Schedules</h4>
+                  <h4 className="text-senior-large font-bold text-blue-900">Flexible Schedules</h4>
                 </div>
-                <p className="text-blue-700 text-sm">
+                <p className="text-blue-700 text-senior">
                   78% of positions offer part-time or flexible scheduling options perfect for retirement lifestyle.
                 </p>
               </div>
@@ -307,9 +307,9 @@ export default function Dashboard() {
               <div className="bg-purple-50 rounded-lg p-4">
                 <div className="flex items-center mb-2">
                   <MapPin className="w-5 h-5 text-purple-600 mr-2" />
-                  <h4 className="font-semibold text-purple-900">Local Opportunities</h4>
+                  <h4 className="text-senior-large font-bold text-purple-900">Local Opportunities</h4>
                 </div>
-                <p className="text-purple-700 text-sm">
+                <p className="text-purple-700 text-senior">
                   Most matches are within 10 miles of your location, reducing commute stress.
                 </p>
               </div>
@@ -334,8 +334,8 @@ export default function Dashboard() {
                 >
                   <User className="w-5 h-5 mr-3" />
                   <div className="text-left">
-                    <div className="font-medium">Edit Job Preferences</div>
-                    <div className="text-sm text-gray-600">Update your interests</div>
+                    <div className="text-senior-button font-semibold">Edit Job Preferences</div>
+                    <div className="text-senior text-senior-secondary">Update your interests</div>
                   </div>
                 </Button>
               </Link>
@@ -349,8 +349,8 @@ export default function Dashboard() {
                 >
                   <Target className="w-5 h-5 mr-3" />
                   <div className="text-left">
-                    <div className="font-medium">Retake Assessment</div>
-                    <div className="text-sm text-gray-600">Update your answers</div>
+                    <div className="text-senior-button font-semibold">Retake Assessment</div>
+                    <div className="text-senior text-senior-secondary">Update your answers</div>
                   </div>
                 </Button>
               </Link>
@@ -385,22 +385,22 @@ export default function Dashboard() {
               >
                 <Mail className="w-5 h-5 mr-3" />
                 <div className="text-left">
-                  <div className="font-medium">Send Job Alerts</div>
-                  <div className="text-sm text-gray-600">Test email notifications</div>
+                  <div className="text-senior-button font-semibold">Send Job Alerts</div>
+                  <div className="text-senior text-senior-secondary">Test email notifications</div>
                 </div>
               </Button>
 
               <div className="pt-4 border-t">
-                <h4 className="font-medium text-gray-900 mb-3">Your Preferences</h4>
-                <div className="space-y-2 text-sm">
+                <h4 className="text-senior-large font-bold text-gray-900 mb-3">Your Preferences</h4>
+                <div className="space-y-2 text-senior">
                   <div className="flex items-center justify-between">
-                    <span className="text-gray-600">Email Alerts</span>
+                    <span className="text-senior-secondary">Email Alerts</span>
                     <Badge variant={preferences?.notificationsEnabled ? "default" : "secondary"}>
                       {preferences?.notificationsEnabled ? "On" : "Off"}
                     </Badge>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-gray-600">Schedule</span>
+                    <span className="text-senior-secondary">Schedule</span>
                     <Badge variant="outline">
                       {preferences?.schedulePreference || "Weekly"}
                     </Badge>
@@ -415,19 +415,19 @@ export default function Dashboard() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h2 
-              className="text-2xl font-bold text-gray-900"
+              className="mobile-heading text-gray-900"
               data-testid="text-job-matches-title"
             >
               Your Job Matches
             </h2>
             <p 
-              className="text-gray-600"
+              className="text-senior-large text-senior-secondary"
               data-testid="text-job-matches-description"
             >
               Based on your preferences and experience
             </p>
           </div>
-          <Badge variant="secondary" className="text-lg px-4 py-2">
+          <Badge variant="secondary" className="text-senior px-4 py-2">
             {filteredJobs.length} of {jobs.length} opportunities
           </Badge>
         </div>
@@ -438,17 +438,17 @@ export default function Dashboard() {
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center">
                 <Filter className="w-5 h-5 mr-2 text-gray-600" />
-                <h3 className="text-lg font-semibold text-gray-900">Filter Jobs</h3>
+                <h3 className="mobile-subheading text-gray-900">Filter Jobs</h3>
               </div>
               {hasActiveFilters && (
                 <Button
                   onClick={clearFilters}
                   variant="outline"
-                  size="sm"
-                  className="text-gray-600"
+                  size="default"
+                  className="text-senior min-h-12 px-4 py-2"
                   data-testid="button-clear-filters"
                 >
-                  <X className="w-4 h-4 mr-2" />
+                  <X className="w-5 h-5 mr-2" />
                   Clear Filters
                 </Button>
               )}

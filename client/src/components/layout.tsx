@@ -31,7 +31,7 @@ export function Layout({ children }: LayoutProps) {
                 <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
                   <Briefcase className="w-6 h-6 text-white" />
                 </div>
-                <h1 className="text-xl font-semibold text-gray-900">Retiree Gigs</h1>
+                <h1 className="mobile-subheading text-gray-900">Retiree Gigs</h1>
               </div>
             </Link>
 
@@ -41,7 +41,7 @@ export function Layout({ children }: LayoutProps) {
                   <Button
                     variant="ghost"
                     size="default"
-                    className="text-gray-600 hover:text-gray-900 rounded-lg"
+                    className="text-senior-secondary hover:text-gray-900 rounded-lg min-h-12 px-4 py-2"
                     data-testid="menu-button"
                   >
                     <Menu className="w-6 h-6" />
@@ -97,6 +97,7 @@ export function Layout({ children }: LayoutProps) {
                 <Button
                   variant="outline"
                   size="default"
+                  className="text-senior-button min-h-12 px-6 py-3"
                   data-testid="button-login-nav"
                 >
                   Sign In

@@ -91,12 +91,12 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
             </div>
             
             {import.meta.env.DEV && this.state.error && (
-              <div className="mb-4 p-3 bg-muted rounded text-xs font-mono overflow-auto max-h-32">
+              <div className="mb-4 p-3 bg-muted rounded text-senior-muted font-mono overflow-auto max-h-32">
                 <strong>Error:</strong> {this.state.error.message}
                 {this.state.error.stack && (
                   <details className="mt-2">
                     <summary className="cursor-pointer text-muted-foreground">Stack trace</summary>
-                    <pre className="mt-1 whitespace-pre-wrap text-xs">{this.state.error.stack}</pre>
+                    <pre className="mt-1 whitespace-pre-wrap text-senior-muted">{this.state.error.stack}</pre>
                   </details>
                 )}
               </div>
@@ -122,7 +122,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
               </Button>
             </div>
             
-            <p className="text-xs text-muted-foreground mt-4">
+            <p className="text-senior-muted mt-4">
               If this problem persists, please refresh the page or contact support.
             </p>
           </div>

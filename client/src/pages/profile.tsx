@@ -259,7 +259,7 @@ export default function Profile() {
         <div className="max-w-2xl mx-auto px-6 py-8">
           <div className="text-center py-12">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-            <p className="mt-4 text-gray-600">Loading your profile...</p>
+            <p className="mt-4 text-senior text-senior-secondary">Loading your profile...</p>
           </div>
         </div>
       </Layout>
@@ -276,7 +276,7 @@ export default function Profile() {
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <h2 
-            className="text-3xl font-bold text-gray-900"
+            className="mobile-heading text-gray-900"
             data-testid="text-profile-title"
           >
             Your Profile
@@ -284,11 +284,11 @@ export default function Profile() {
           <Button
             onClick={handleLogout}
             variant="outline"
-            size="sm"
-            className="text-gray-600 hover:text-gray-900"
+            size="default"
+            className="text-senior hover:text-gray-900 min-h-12 px-4 py-2"
             data-testid="button-logout"
           >
-            <LogOut className="w-4 h-4 mr-2" />
+            <LogOut className="w-5 h-5 mr-2" />
             Sign Out
           </Button>
         </div>
@@ -473,7 +473,7 @@ export default function Profile() {
                 ) : (
                   <div className="space-y-2">
                     <h3 
-                      className="text-xl font-semibold text-gray-900"
+                      className="text-xl font-semibold text-foreground"
                       data-testid="text-user-name"
                     >
                       {authUser?.firstName && authUser?.lastName 
@@ -481,14 +481,14 @@ export default function Profile() {
                         : authUser?.email || 'User'
                       }
                     </h3>
-                    <div className="flex items-center text-gray-600">
+                    <div className="flex items-center text-muted-foreground">
                       <Mail className="w-4 h-4 mr-2" />
                       <span data-testid="text-user-email">
                         {authUser?.email || "Email not provided"}
                       </span>
                     </div>
                     {(authUser?.streetAddress || authUser?.city || authUser?.state || authUser?.zipCode) && (
-                      <div className="flex items-center text-gray-600">
+                      <div className="flex items-center text-muted-foreground">
                         <MapPin className="w-4 h-4 mr-2" />
                         <span data-testid="text-user-address">
                           {[
@@ -521,8 +521,8 @@ export default function Profile() {
           <CardContent className="space-y-6">
             <div className="flex items-center justify-between">
               <div>
-                <h4 className="font-medium text-gray-900">Email Notifications</h4>
-                <p className="text-sm text-gray-600">Receive job opportunities via email</p>
+                <h4 className="font-medium text-foreground">Email Notifications</h4>
+                <p className="text-senior-muted">Receive job opportunities via email</p>
               </div>
               <Switch
                 checked={notificationsEnabled}
@@ -532,7 +532,7 @@ export default function Profile() {
             </div>
 
             <div>
-              <h4 className="font-medium text-gray-900 mb-4">Notification Schedule</h4>
+              <h4 className="font-medium text-foreground mb-4">Notification Schedule</h4>
               <div className="grid grid-cols-1 gap-3">
                 {(["daily", "weekly", "biweekly"] as SchedulePreference[]).map((schedule) => (
                   <Button

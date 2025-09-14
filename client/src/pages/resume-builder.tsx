@@ -367,7 +367,7 @@ export default function ResumeBuilder() {
                         <div className="flex items-center gap-2">
                           <CardTitle className="text-lg">{resume.title}</CardTitle>
                           {resume.isDefault && (
-                            <Badge variant="secondary" className="text-xs">
+                            <Badge variant="secondary" className="text-senior-muted">
                               <Star className="w-3 h-3 mr-1" />
                               Default
                             </Badge>

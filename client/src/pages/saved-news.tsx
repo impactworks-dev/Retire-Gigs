@@ -165,7 +165,7 @@ export default function SavedNews() {
                         <User className="w-4 h-4 mr-1" />
                         <span>By {savedArticle.article.author}</span>
                       </div>
-                      <div className="text-xs text-gray-500">
+                      <div className="text-senior-muted">
                         Saved {format(new Date(savedArticle.savedAt), 'MMM d, yyyy')}
                       </div>
                     </div>

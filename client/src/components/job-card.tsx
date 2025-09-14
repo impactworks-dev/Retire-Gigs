@@ -126,31 +126,31 @@ export function JobCard({ job, onViewDetails }: JobCardProps) {
       <div className="flex items-start justify-between mb-4">
         <div className="flex-1">
           <h4 
-            className="text-xl font-semibold text-gray-900 mb-2"
+            className="mobile-subheading text-gray-900 mb-2"
             data-testid={`text-job-title-${job.id}`}
           >
             {job.title}
           </h4>
           <p 
-            className="text-lg text-gray-600 mb-2"
+            className="text-senior-large text-senior-secondary mb-2"
             data-testid={`text-company-${job.id}`}
           >
             {job.company}
           </p>
-          <div className="flex items-center text-sm text-gray-500">
-            <MapPin className="w-4 h-4 mr-1" />
+          <div className="flex items-center text-senior text-senior-muted">
+            <MapPin className="w-5 h-5 mr-2" />
             <span data-testid={`text-location-${job.id}`}>{job.location}</span>
           </div>
         </div>
         <div className="text-right">
           <div 
-            className="text-lg font-semibold text-secondary"
+            className="text-senior-large font-bold text-secondary"
             data-testid={`text-pay-${job.id}`}
           >
             {job.pay}
           </div>
           <div 
-            className="text-sm text-gray-500"
+            className="text-senior text-senior-muted"
             data-testid={`text-schedule-${job.id}`}
           >
             {job.schedule}
@@ -159,15 +159,15 @@ export function JobCard({ job, onViewDetails }: JobCardProps) {
       </div>
 
       <p 
-        className="text-gray-600 mb-4"
+        className="text-senior text-senior-secondary mb-4"
         data-testid={`text-description-${job.id}`}
       >
         {job.description}
       </p>
 
       <div className="flex items-center justify-between mt-6">
-        <div className="flex items-center text-sm text-gray-500">
-          <Clock className="w-4 h-4 mr-1" />
+        <div className="flex items-center text-senior text-senior-muted">
+          <Clock className="w-5 h-5 mr-2" />
           <span data-testid={`text-time-ago-${job.id}`}>{job.timeAgo}</span>
         </div>
         <div className="flex items-center gap-3">
@@ -190,7 +190,7 @@ export function JobCard({ job, onViewDetails }: JobCardProps) {
           <Button 
             onClick={() => onViewDetails(job.id)}
             size="default"
-            className="bg-primary hover:bg-blue-700 text-white font-medium rounded-lg transition-colors duration-200"
+            className="bg-primary hover:bg-blue-700 text-white text-senior-button px-6 py-3 min-h-12 rounded-lg transition-colors duration-200"
             data-testid={`button-view-details-${job.id}`}
           >
             View Details
@@ -200,7 +200,7 @@ export function JobCard({ job, onViewDetails }: JobCardProps) {
 
       <div className="mt-6 flex items-center flex-wrap gap-3">
         <div 
-          className={`text-sm font-medium px-3 py-2 rounded-full ${getMatchScoreColor(job.matchScore || "potential")}`}
+          className={`text-senior font-semibold px-4 py-2 rounded-full ${getMatchScoreColor(job.matchScore || "potential")}`}
           data-testid={`badge-match-score-${job.id}`}
         >
           {getMatchScoreLabel(job.matchScore || "potential")}
@@ -208,7 +208,7 @@ export function JobCard({ job, onViewDetails }: JobCardProps) {
         {Array.isArray(job.tags) && job.tags.map((tag, index) => (
           <div 
             key={index}
-            className="bg-blue-100 text-blue-800 text-sm font-medium px-3 py-2 rounded-full"
+            className="bg-blue-100 text-blue-800 text-senior font-medium px-4 py-2 rounded-full"
             data-testid={`badge-tag-${tag}-${job.id}`}
           >
             {tag}

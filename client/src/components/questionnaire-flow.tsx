@@ -60,17 +60,17 @@ export function QuestionnaireFlow({ onComplete }: QuestionnaireFlowProps) {
     <div className="max-w-2xl mx-auto px-6 py-8">
       {/* Progress Bar */}
       <div className="mb-8">
-        <div className="flex justify-between text-sm text-gray-600 mb-2">
-          <span data-testid="text-question-progress">
-            Question <span>{currentQuestion}</span> of {totalQuestions}
+        <div className="flex justify-between text-senior-secondary mb-2">
+          <span data-testid="text-question-progress" className="text-senior-secondary">
+            Question <span className="font-semibold">{currentQuestion}</span> of {totalQuestions}
           </span>
           <div className="flex items-center gap-4">
             {currentAnswers.length > 0 && (
-              <span data-testid="text-selections-count" className="text-primary font-medium">
+              <span data-testid="text-selections-count" className="text-primary font-semibold text-senior">
                 {currentAnswers.length} selected
               </span>
             )}
-            <span data-testid="text-progress-percent">{Math.round(progress)}%</span>
+            <span data-testid="text-progress-percent" className="text-senior-secondary font-medium">{Math.round(progress)}%</span>
           </div>
         </div>
         <Progress value={progress} className="h-3" data-testid="progress-questionnaire" />
@@ -79,18 +79,18 @@ export function QuestionnaireFlow({ onComplete }: QuestionnaireFlowProps) {
       {/* Question Content */}
       <div className="bg-white rounded-2xl shadow-lg p-8">
         <h2 
-          className="text-2xl font-bold text-gray-900 mb-4"
+          className="mobile-heading text-gray-900 mb-4"
           data-testid={`text-question-title-${currentQuestion}`}
         >
           {currentQuestionData.title}
         </h2>
         <p 
-          className="text-lg text-gray-600 mb-4"
+          className="text-senior-large text-senior-secondary mb-4"
           data-testid={`text-question-description-${currentQuestion}`}
         >
           {currentQuestionData.description}
         </p>
-        <p className="text-sm text-gray-500 mb-8 italic">
+        <p className="text-senior text-senior-muted mb-8 italic font-medium">
           You can select multiple options that apply to you.
         </p>
 
@@ -102,7 +102,7 @@ export function QuestionnaireFlow({ onComplete }: QuestionnaireFlowProps) {
               <button
                 key={option.value}
                 onClick={() => handleAnswerSelect(option.value)}
-                className={`w-full text-left text-lg font-medium py-6 px-8 rounded-xl border-2 transition-all duration-200 flex items-center justify-between min-h-16 ${
+                className={`w-full text-left text-senior-button py-6 px-8 rounded-xl border-2 transition-all duration-200 flex items-center justify-between min-h-16 ${
                   isSelected
                     ? "bg-primary text-white border-primary"
                     : "bg-gray-50 hover:bg-primary hover:text-white text-gray-900 border-transparent hover:border-primary"
@@ -133,7 +133,7 @@ export function QuestionnaireFlow({ onComplete }: QuestionnaireFlowProps) {
           disabled={currentQuestion === 1}
           variant="outline"
           size="lg"
-          className="text-lg font-medium"
+          className="text-senior-button min-h-12 px-8 py-4"
           data-testid="button-previous"
         >
           <ChevronLeft className="w-5 h-5 mr-2" />
@@ -144,7 +144,7 @@ export function QuestionnaireFlow({ onComplete }: QuestionnaireFlowProps) {
           onClick={handleNext}
           disabled={!isAnswered}
           size="lg"
-          className="bg-primary hover:bg-blue-700 text-white text-lg font-medium"
+          className="bg-primary hover:bg-blue-700 text-white text-senior-button min-h-12 px-8 py-4"
           data-testid="button-next"
         >
           {currentQuestion === totalQuestions ? "See My Matches" : "Next"}

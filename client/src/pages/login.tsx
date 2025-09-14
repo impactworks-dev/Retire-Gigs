@@ -15,13 +15,13 @@ export default function Login() {
             <LogIn className="w-8 h-8 text-white" />
           </div>
           <h2 
-            className="text-3xl font-bold text-gray-900 mb-4"
+            className="text-3xl font-bold text-foreground mb-4"
             data-testid="text-login-title"
           >
             Welcome Back
           </h2>
           <p 
-            className="text-lg text-gray-600"
+            className="text-senior text-muted-foreground"
             data-testid="text-login-description"
           >
             Sign in to access your job matches and preferences.
@@ -40,7 +40,7 @@ export default function Login() {
           </Button>
           
           <p 
-            className="text-sm text-gray-500 mt-4 text-center"
+            className="text-senior-muted mt-4 text-center"
             data-testid="text-login-help"
           >
             Secure authentication powered by Replit

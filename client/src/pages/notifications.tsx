@@ -434,7 +434,7 @@ export default function Notifications() {
                   </Button>
                   
                   {!phoneNumber && (
-                    <p className="text-xs text-gray-500 text-center">
+                    <p className="text-senior-muted text-center">
                       Enter a phone number above to test SMS
                     </p>
                   )}
