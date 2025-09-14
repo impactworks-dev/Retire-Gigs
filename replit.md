@@ -62,6 +62,37 @@ Preferred communication style: Simple, everyday language.
 - **Job Board APIs**: For external job opportunity sourcing
 - **Analytics**: For user behavior tracking and platform optimization
 
+## Environment Configuration
+
+### Scheduled Job Scraping Environment Variables
+
+The scheduled job scraping system supports the following environment variables for operational control:
+
+#### Scheduler Configuration
+- `JOB_SCHEDULER_ENABLED=true|false` - Enable/disable the job scheduler (default: false for safety)
+- `JOB_SCHEDULER_FREQUENCY=daily|weekly|biweekly|monthly` - Default scheduling frequency (default: weekly)
+- `MAX_CONCURRENT_SESSIONS=1` - Maximum concurrent scraping sessions (default: 1)
+- `SESSION_TIMEOUT_MINUTES=60` - Session timeout in minutes (default: 60)
+- `TZ=America/New_York` - Timezone for scheduling (default: America/New_York)
+
+#### Operational Controls
+- `SCRAPING_KILL_SWITCH=true|false` - Global emergency kill switch (default: false)
+- `MIN_QUALITY_THRESHOLD=40` - Minimum quality threshold percentage (default: 40)
+- `MAX_JOBS_PER_SITE=50` - Maximum jobs per site per session (default: 50)
+
+#### Site Controls
+- `INDEED_ENABLED=true|false` - Enable Indeed scraping (default: true)
+- `AARP_ENABLED=true|false` - Enable AARP scraping (default: true)
+- `USAJOBS_ENABLED=true|false` - Enable USAJobs scraping (default: true)
+
+#### Admin Access
+The scheduled job scraping system includes comprehensive admin endpoints available at:
+- `/api/admin/scheduler/*` - Scheduler control and status
+- `/api/admin/operations/*` - Operational controls and health monitoring
+- `/api/admin/quality/*` - Quality metrics and recommendations
+
+All admin endpoints require authentication and admin privileges.
+
 ## Recent Changes
 
 ### SMS Notifications Implementation (August 31, 2025)
@@ -97,6 +128,14 @@ Preferred communication style: Simple, everyday language.
 - Created "Use Current Location" functionality for profile forms
 - Added latitude/longitude database fields for precise location data
 - Enhanced user experience with location-based job recommendations
+
+### Scheduled Job Scraping System (September 14, 2025)
+- Implemented comprehensive scheduled job scraping with cron functionality
+- Added operational guardrails including per-site caps, quality backoff, and feature flags
+- Created admin endpoints for scheduler control and operational management
+- Built quality monitoring system with metrics tracking and recommendations
+- Added emergency controls and kill switches for operational safety
+- Integrated with existing job scraping and notification systems
 
 ### Database Integration (August 26, 2025)
 - Migrated from in-memory storage to PostgreSQL database using Neon

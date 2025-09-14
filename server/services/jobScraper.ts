@@ -20,7 +20,7 @@ interface JobScrapingResult {
   errors: string[];
 }
 
-interface JobScrapingSession {
+export interface JobScrapingSession {
   sessionId: string;
   startTime: Date;
   totalUsers: number;

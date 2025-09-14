@@ -27,6 +27,9 @@ import { malwareScannerService } from "./malwareScanner";
 import { logger } from "./logger";
 import { firecrawlService } from "./services/firecrawl";
 import { jobScraperService } from "./services/jobScraper";
+import { jobScheduler } from "./services/jobScheduler";
+import { operationalControls } from "./services/operationalControls";
+import { QualityMetricsTracker } from "./services/qualityMetrics";
 import { drizzle } from "drizzle-orm/neon-serverless";
 import { neon } from "@neondatabase/serverless";
 import path from "path";
@@ -1640,6 +1643,422 @@ export async function registerRoutes(app: Express): Promise<Server> {
   cron.schedule("0 9 * * *", async () => {
     logger.info("Running scheduled job notifications", { operation: 'cron_job_notifications', scheduler: 'node-cron' });
     await jobMatchingService.processAllUserNotifications();
+  });
+
+  // ============================================================================
+  // ADMIN ENDPOINTS FOR SCHEDULED JOB SCRAPING SYSTEM
+  // ============================================================================
+
+  // Scheduler Control Endpoints
+  // ==========================
+
+  // Get scheduler status and statistics
+  app.get("/api/admin/scheduler/status", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const status = jobScheduler.getStatus();
+      const operationalHealth = operationalControls.getHealthSummary();
+      
+      res.json({
+        scheduler: status,
+        operational: operationalHealth,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      logger.error("Error getting scheduler status", error, { operation: 'admin_scheduler_status' });
+      res.status(500).json({ 
+        message: "Failed to get scheduler status",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Start scheduled job scraping
+  app.post("/api/admin/scheduler/start", strictRateLimit, isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const { frequency } = req.body;
+      const validFrequencies = ['daily', 'weekly', 'biweekly', 'monthly'];
+      
+      if (frequency && !validFrequencies.includes(frequency)) {
+        return res.status(400).json({ 
+          message: `Invalid frequency. Must be one of: ${validFrequencies.join(', ')}` 
+        });
+      }
+
+      const result = await jobScheduler.start(frequency);
+      
+      logger.info("Admin started job scheduler", {
+        operation: 'admin_scheduler_start',
+        userId: req.user?.claims?.sub,
+        frequency: frequency || 'default',
+        success: result.success
+      });
+
+      res.json(result);
+    } catch (error) {
+      logger.error("Error starting scheduler", error, { 
+        operation: 'admin_scheduler_start_failed',
+        userId: req.user?.claims?.sub
+      });
+      res.status(500).json({ 
+        message: "Failed to start scheduler",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Stop scheduled job scraping
+  app.post("/api/admin/scheduler/stop", strictRateLimit, isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const result = await jobScheduler.stop();
+      
+      logger.info("Admin stopped job scheduler", {
+        operation: 'admin_scheduler_stop',
+        userId: req.user?.claims?.sub,
+        success: result.success
+      });
+
+      res.json(result);
+    } catch (error) {
+      logger.error("Error stopping scheduler", error, { 
+        operation: 'admin_scheduler_stop_failed',
+        userId: req.user?.claims?.sub
+      });
+      res.status(500).json({ 
+        message: "Failed to stop scheduler",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Execute manual job scraping session
+  app.post("/api/admin/scheduler/execute-manual", strictRateLimit, isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      logger.info("Admin initiated manual job scraping", {
+        operation: 'admin_manual_execution',
+        userId: req.user?.claims?.sub
+      });
+
+      const session = await jobScheduler.executeManual();
+      
+      res.json({
+        success: true,
+        message: "Manual scraping session executed",
+        session: {
+          sessionId: session.sessionId,
+          startTime: session.startTime,
+          totalUsers: session.totalUsers,
+          processedUsers: session.processedUsers,
+          jobsScraped: session.totalJobsScraped,
+          jobsSaved: session.totalJobsSaved,
+          jobsSkipped: session.totalJobsSkipped,
+          errorCount: session.errors.length
+        }
+      });
+    } catch (error) {
+      logger.error("Error executing manual scraping", error, { 
+        operation: 'admin_manual_execution_failed',
+        userId: req.user?.claims?.sub
+      });
+      res.status(500).json({ 
+        message: "Failed to execute manual scraping",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Update scheduler configuration
+  app.patch("/api/admin/scheduler/config", strictRateLimit, isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const updates = req.body;
+      const result = jobScheduler.updateConfig(updates);
+      
+      logger.info("Admin updated scheduler config", {
+        operation: 'admin_scheduler_config_update',
+        userId: req.user?.claims?.sub,
+        updates,
+        success: result.success
+      });
+
+      res.json(result);
+    } catch (error) {
+      logger.error("Error updating scheduler config", error, { 
+        operation: 'admin_scheduler_config_failed',
+        userId: req.user?.claims?.sub
+      });
+      res.status(500).json({ 
+        message: "Failed to update scheduler configuration",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Operational Controls Endpoints
+  // =============================
+
+  // Get operational health and status
+  app.get("/api/admin/operations/health", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const health = operationalControls.getHealthSummary();
+      const config = operationalControls.getPublicConfig();
+      const sessionStats = operationalControls.getSessionStats();
+      
+      res.json({
+        health,
+        config,
+        currentSession: sessionStats,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      logger.error("Error getting operational health", error, { operation: 'admin_operational_health' });
+      res.status(500).json({ 
+        message: "Failed to get operational health",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Get full operational configuration
+  app.get("/api/admin/operations/config", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const config = operationalControls.getConfig();
+      res.json(config);
+    } catch (error) {
+      logger.error("Error getting operational config", error, { operation: 'admin_operational_config' });
+      res.status(500).json({ 
+        message: "Failed to get operational configuration",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Update operational configuration
+  app.patch("/api/admin/operations/config", strictRateLimit, isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const updates = req.body;
+      operationalControls.updateConfig(updates);
+      
+      logger.info("Admin updated operational config", {
+        operation: 'admin_operational_config_update',
+        userId: req.user?.claims?.sub,
+        updates
+      });
+
+      res.json({
+        success: true,
+        message: "Operational configuration updated",
+        newConfig: operationalControls.getPublicConfig()
+      });
+    } catch (error) {
+      logger.error("Error updating operational config", error, { 
+        operation: 'admin_operational_config_failed',
+        userId: req.user?.claims?.sub
+      });
+      res.status(500).json({ 
+        message: "Failed to update operational configuration",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Emergency stop all scraping operations
+  app.post("/api/admin/operations/emergency-stop", strictRateLimit, isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const { reason } = req.body;
+      const stopReason = reason || `Emergency stop by admin ${req.user?.claims?.sub}`;
+      
+      operationalControls.emergencyStop(stopReason);
+      
+      logger.error("EMERGENCY STOP activated by admin", {
+        operation: 'admin_emergency_stop',
+        userId: req.user?.claims?.sub,
+        reason: stopReason
+      });
+
+      res.json({
+        success: true,
+        message: "Emergency stop activated - all scraping operations halted",
+        reason: stopReason,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      logger.error("Error activating emergency stop", error, { 
+        operation: 'admin_emergency_stop_failed',
+        userId: req.user?.claims?.sub
+      });
+      res.status(500).json({ 
+        message: "Failed to activate emergency stop",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Resume operations after emergency stop
+  app.post("/api/admin/operations/resume", strictRateLimit, isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const { reason } = req.body;
+      const resumeReason = reason || `Operations resumed by admin ${req.user?.claims?.sub}`;
+      
+      operationalControls.resumeOperations(resumeReason);
+      
+      logger.info("Operations resumed by admin", {
+        operation: 'admin_operations_resume',
+        userId: req.user?.claims?.sub,
+        reason: resumeReason
+      });
+
+      res.json({
+        success: true,
+        message: "Operations resumed - scraping can proceed",
+        reason: resumeReason,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      logger.error("Error resuming operations", error, { 
+        operation: 'admin_operations_resume_failed',
+        userId: req.user?.claims?.sub
+      });
+      res.status(500).json({ 
+        message: "Failed to resume operations",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Toggle site enabled/disabled
+  app.patch("/api/admin/operations/site/:site", strictRateLimit, isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const { site } = req.params;
+      const { enabled, reason } = req.body;
+      
+      const validSites = ['indeed', 'aarp', 'usajobs'];
+      if (!validSites.includes(site)) {
+        return res.status(400).json({ 
+          message: `Invalid site. Must be one of: ${validSites.join(', ')}` 
+        });
+      }
+
+      if (typeof enabled !== 'boolean') {
+        return res.status(400).json({ 
+          message: 'enabled field must be a boolean' 
+        });
+      }
+
+      operationalControls.setSiteEnabled(site as any, enabled, reason);
+      
+      logger.info(`Admin ${enabled ? 'enabled' : 'disabled'} site`, {
+        operation: 'admin_site_toggle',
+        userId: req.user?.claims?.sub,
+        site,
+        enabled,
+        reason
+      });
+
+      res.json({
+        success: true,
+        message: `Site ${site} ${enabled ? 'enabled' : 'disabled'}`,
+        site,
+        enabled,
+        reason
+      });
+    } catch (error) {
+      logger.error("Error toggling site", error, { 
+        operation: 'admin_site_toggle_failed',
+        userId: req.user?.claims?.sub,
+        site: req.params.site
+      });
+      res.status(500).json({ 
+        message: "Failed to toggle site",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Quality Monitoring Endpoints
+  // ===========================
+
+  // Get quality statistics and trends
+  app.get("/api/admin/quality/stats", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const hours = req.query.hours ? parseInt(req.query.hours as string) : 24;
+      
+      if (isNaN(hours) || hours <= 0 || hours > 168) {
+        return res.status(400).json({ 
+          message: 'hours parameter must be between 1 and 168' 
+        });
+      }
+
+      const stats = QualityMetricsTracker.getQualityStats(hours);
+      const validationStats = QualityMetricsTracker.getValidationStats(hours);
+      
+      res.json({
+        timeframe: `${hours} hours`,
+        quality: stats,
+        validation: validationStats,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      logger.error("Error getting quality stats", error, { operation: 'admin_quality_stats' });
+      res.status(500).json({ 
+        message: "Failed to get quality statistics",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Get quality improvement recommendations
+  app.get("/api/admin/quality/recommendations", isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const recommendations = QualityMetricsTracker.getQualityRecommendations();
+      
+      res.json({
+        recommendations,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      logger.error("Error getting quality recommendations", error, { operation: 'admin_quality_recommendations' });
+      res.status(500).json({ 
+        message: "Failed to get quality recommendations",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Test job scraper for specific user (debugging tool)
+  app.post("/api/admin/test-scraper/:userId", strictRateLimit, isAuthenticated, isAdmin, async (req, res) => {
+    try {
+      const { userId } = req.params;
+      
+      logger.info("Admin initiated test scraping for user", {
+        operation: 'admin_test_scraper',
+        adminUserId: req.user?.claims?.sub,
+        targetUserId: userId
+      });
+
+      const result = await jobScraperService.scrapeJobsForUser(userId);
+      
+      res.json({
+        success: true,
+        message: "Test scraping completed",
+        result: {
+          userId: result.userId,
+          scrapedCount: result.scrapedCount,
+          savedCount: result.savedCount,
+          skippedCount: result.skippedCount,
+          errorCount: result.errors.length,
+          errors: result.errors.slice(0, 5) // Only first 5 errors for brevity
+        }
+      });
+    } catch (error) {
+      logger.error("Error in test scraper", error, { 
+        operation: 'admin_test_scraper_failed',
+        adminUserId: req.user?.claims?.sub,
+        targetUserId: req.params.userId
+      });
+      res.status(500).json({ 
+        message: "Failed to execute test scraping",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
   });
 
   const httpServer = createServer(app);
