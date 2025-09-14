@@ -95,14 +95,14 @@ export function QuestionnaireFlow({ onComplete }: QuestionnaireFlowProps) {
         </p>
 
         {/* Answer Options */}
-        <div className="space-y-4">
+        <div className="space-y-6">
           {currentQuestionData.options.map((option) => {
             const isSelected = currentAnswers.includes(option.value);
             return (
               <button
                 key={option.value}
                 onClick={() => handleAnswerSelect(option.value)}
-                className={`w-full text-left text-lg font-medium py-4 px-6 rounded-xl border-2 transition-all duration-200 flex items-center justify-between ${
+                className={`w-full text-left text-lg font-medium py-6 px-8 rounded-xl border-2 transition-all duration-200 flex items-center justify-between min-h-16 ${
                   isSelected
                     ? "bg-primary text-white border-primary"
                     : "bg-gray-50 hover:bg-primary hover:text-white text-gray-900 border-transparent hover:border-primary"
@@ -133,7 +133,7 @@ export function QuestionnaireFlow({ onComplete }: QuestionnaireFlowProps) {
           disabled={currentQuestion === 1}
           variant="outline"
           size="lg"
-          className="text-lg font-medium py-3 px-8"
+          className="text-lg font-medium"
           data-testid="button-previous"
         >
           <ChevronLeft className="w-5 h-5 mr-2" />
@@ -144,7 +144,7 @@ export function QuestionnaireFlow({ onComplete }: QuestionnaireFlowProps) {
           onClick={handleNext}
           disabled={!isAnswered}
           size="lg"
-          className="bg-primary hover:bg-blue-700 text-white text-lg font-medium py-3 px-8"
+          className="bg-primary hover:bg-blue-700 text-white text-lg font-medium"
           data-testid="button-next"
         >
           {currentQuestion === totalQuestions ? "See My Matches" : "Next"}

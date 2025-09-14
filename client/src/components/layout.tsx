@@ -27,9 +27,9 @@ export function Layout({ children }: LayoutProps) {
         <div className="max-w-4xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             <Link href="/">
-              <div className="flex items-center space-x-3 cursor-pointer">
-                <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                  <Briefcase className="w-5 h-5 text-white" />
+              <div className="flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-gray-50 transition-colors min-h-12 -ml-2">
+                <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
+                  <Briefcase className="w-6 h-6 text-white" />
                 </div>
                 <h1 className="text-xl font-semibold text-gray-900">Retiree Gigs</h1>
               </div>
@@ -40,8 +40,8 @@ export function Layout({ children }: LayoutProps) {
                 <DropdownMenuTrigger asChild>
                   <Button
                     variant="ghost"
-                    size="sm"
-                    className="p-2 text-gray-600 hover:text-gray-900 rounded-lg"
+                    size="default"
+                    className="text-gray-600 hover:text-gray-900 rounded-lg"
                     data-testid="menu-button"
                   >
                     <Menu className="w-6 h-6" />
@@ -50,44 +50,44 @@ export function Layout({ children }: LayoutProps) {
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem asChild>
                     <Link href="/saved-jobs">
-                      <Bookmark className="w-4 h-4 mr-2" />
+                      <Bookmark className="w-5 h-5 mr-3" />
                       Saved Jobs
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
                     <Link href="/saved-news">
-                      <BookmarkCheck className="w-4 h-4 mr-2" />
+                      <BookmarkCheck className="w-5 h-5 mr-3" />
                       Saved Articles
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
                     <Link href="/resumes">
-                      <FileText className="w-4 h-4 mr-2" />
+                      <FileText className="w-5 h-5 mr-3" />
                       Resume Builder
                     </Link>
                   </DropdownMenuItem>
 
                   <DropdownMenuItem asChild>
                     <Link href="/notifications">
-                      <Bell className="w-4 h-4 mr-2" />
+                      <Bell className="w-5 h-5 mr-3" />
                       Notifications
                     </Link>
                   </DropdownMenuItem>
 
                   <DropdownMenuItem asChild>
                     <Link href="/news">
-                      <Newspaper className="w-4 h-4 mr-2" />
+                      <Newspaper className="w-5 h-5 mr-3" />
                       News & Resources
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
                     <Link href="/profile">
-                      <User className="w-4 h-4 mr-2" />
+                      <User className="w-5 h-5 mr-3" />
                       Profile & Settings
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={handleLogout}>
-                    <LogOut className="w-4 h-4 mr-2" />
+                    <LogOut className="w-5 h-5 mr-3" />
                     Sign Out
                   </DropdownMenuItem>
                 </DropdownMenuContent>
@@ -96,7 +96,7 @@ export function Layout({ children }: LayoutProps) {
               <Link href="/login">
                 <Button
                   variant="outline"
-                  size="sm"
+                  size="default"
                   data-testid="button-login-nav"
                 >
                   Sign In

@@ -165,31 +165,32 @@ export function JobCard({ job, onViewDetails }: JobCardProps) {
         {job.description}
       </p>
 
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between mt-6">
         <div className="flex items-center text-sm text-gray-500">
           <Clock className="w-4 h-4 mr-1" />
           <span data-testid={`text-time-ago-${job.id}`}>{job.timeAgo}</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           {isAuthenticated && (
             <Button
               variant="outline"
-              size="sm"
+              size="default"
               onClick={handleSaveToggle}
               disabled={saveJobMutation.isPending || unsaveJobMutation.isPending}
-              className={`${isSaved ? 'text-blue-600 border-blue-600' : 'text-gray-600'} hover:bg-blue-50`}
+              className={`${isSaved ? 'text-blue-600 border-blue-600' : 'text-gray-600'} hover:bg-blue-50 min-w-12`}
               data-testid={`button-save-job-${job.id}`}
             >
               {isSaved ? (
-                <BookmarkCheck className="w-4 h-4" />
+                <BookmarkCheck className="w-5 h-5" />
               ) : (
-                <Bookmark className="w-4 h-4" />
+                <Bookmark className="w-5 h-5" />
               )}
             </Button>
           )}
           <Button 
             onClick={() => onViewDetails(job.id)}
-            className="bg-primary hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-lg transition-colors duration-200"
+            size="default"
+            className="bg-primary hover:bg-blue-700 text-white font-medium rounded-lg transition-colors duration-200"
             data-testid={`button-view-details-${job.id}`}
           >
             View Details
@@ -197,9 +198,9 @@ export function JobCard({ job, onViewDetails }: JobCardProps) {
         </div>
       </div>
 
-      <div className="mt-4 flex items-center flex-wrap gap-2">
+      <div className="mt-6 flex items-center flex-wrap gap-3">
         <div 
-          className={`text-xs font-medium px-2 py-1 rounded-full ${getMatchScoreColor(job.matchScore || "potential")}`}
+          className={`text-sm font-medium px-3 py-2 rounded-full ${getMatchScoreColor(job.matchScore || "potential")}`}
           data-testid={`badge-match-score-${job.id}`}
         >
           {getMatchScoreLabel(job.matchScore || "potential")}
@@ -207,7 +208,7 @@ export function JobCard({ job, onViewDetails }: JobCardProps) {
         {Array.isArray(job.tags) && job.tags.map((tag, index) => (
           <div 
             key={index}
-            className="bg-blue-100 text-blue-800 text-xs font-medium px-2 py-1 rounded-full"
+            className="bg-blue-100 text-blue-800 text-sm font-medium px-3 py-2 rounded-full"
             data-testid={`badge-tag-${tag}-${job.id}`}
           >
             {tag}

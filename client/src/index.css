@@ -111,7 +111,7 @@
   }
 }
 
-/* Senior-friendly button styles */
+/* Senior-friendly button styles and touch feedback */
 @layer components {
   .btn-large {
     @apply py-4 px-6 text-lg font-medium rounded-xl transition-all duration-200;
@@ -123,5 +123,31 @@
   
   .btn-answer.selected {
     @apply bg-primary text-white border-primary;
+  }
+  
+  /* Enhanced touch feedback for mobile accessibility */
+  .touch-target {
+    @apply min-h-12 min-w-12;
+  }
+  
+  .touch-feedback {
+    @apply active:scale-95 transition-transform duration-150 ease-out;
+  }
+  
+  .touch-ripple {
+    @apply relative overflow-hidden;
+  }
+  
+  .touch-highlight {
+    @apply hover:bg-accent/10 active:bg-accent/20 transition-colors duration-200;
+  }
+  
+  /* Improved spacing for touch targets */
+  .touch-spacing {
+    @apply space-y-3;
+  }
+  
+  .touch-gap {
+    @apply gap-3;
   }
 }
