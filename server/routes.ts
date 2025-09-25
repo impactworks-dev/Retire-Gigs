@@ -68,31 +68,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
   await setupAuth(app);
   
-  // TEMPORARY: Debug route to help access dashboard
-  app.get("/debug-login/:email", async (req, res) => {
-    const { email } = req.params;
-    if (email === "dante@impactworks.com") {
-      try {
-        const user = await storage.getUserByEmail(email);
-        if (user) {
-          // Manually set up the session
-          req.login({ id: user.id, email: user.email }, (err) => {
-            if (err) {
-              return res.status(500).json({ message: "Login failed" });
-            }
-            res.redirect("/dashboard");
-          });
-        } else {
-          res.status(404).json({ message: "User not found" });
-        }
-      } catch (error) {
-        res.status(500).json({ message: "Error accessing user account" });
-      }
-    } else {
-      res.status(404).json({ message: "Access denied" });
-    }
-  });
-  
   // SECURITY: Rate limiting middleware for different endpoint types
   const generalRateLimit = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
@@ -955,7 +930,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       logger.error("Error in user job scraping", error, {
         operation: 'user_scrape_jobs',
-        userId: req.user?.claims?.sub
+        userId: (req.user as any)?.claims?.sub
       });
       res.status(500).json({
         message: "Failed to complete job scraping",
@@ -1425,7 +1400,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error) {
       logger.error("Failed to update resume with uploaded file", error, {
-        userId: req.user?.claims?.sub || 'unknown',
+        userId: (req.user as any)?.claims?.sub || 'unknown',
         operation: 'resume_file_update'
       });
       res.status(500).json({ message: "Internal server error" });
@@ -1838,7 +1813,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       logger.info("Admin started job scheduler", {
         operation: 'admin_scheduler_start',
-        userId: req.user?.claims?.sub,
+        userId: (req.user as any)?.claims?.sub || (req.user as any)?.id,
         frequency: frequency || 'default',
         success: result.success
       });
@@ -1847,7 +1822,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       logger.error("Error starting scheduler", error, { 
         operation: 'admin_scheduler_start_failed',
-        userId: req.user?.claims?.sub
+        userId: (req.user as any)?.claims?.sub
       });
       res.status(500).json({ 
         message: "Failed to start scheduler",
@@ -1863,7 +1838,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       logger.info("Admin stopped job scheduler", {
         operation: 'admin_scheduler_stop',
-        userId: req.user?.claims?.sub,
+        userId: (req.user as any)?.claims?.sub || (req.user as any)?.id,
         success: result.success
       });
 
@@ -1871,7 +1846,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       logger.error("Error stopping scheduler", error, { 
         operation: 'admin_scheduler_stop_failed',
-        userId: req.user?.claims?.sub
+        userId: (req.user as any)?.claims?.sub
       });
       res.status(500).json({ 
         message: "Failed to stop scheduler",
@@ -1885,7 +1860,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       logger.info("Admin initiated manual job scraping", {
         operation: 'admin_manual_execution',
-        userId: req.user?.claims?.sub
+        userId: (req.user as any)?.claims?.sub
       });
 
       const session = await jobScheduler.executeManual();
@@ -1907,7 +1882,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       logger.error("Error executing manual scraping", error, { 
         operation: 'admin_manual_execution_failed',
-        userId: req.user?.claims?.sub
+        userId: (req.user as any)?.claims?.sub
       });
       res.status(500).json({ 
         message: "Failed to execute manual scraping",
@@ -1924,7 +1899,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       logger.info("Admin updated scheduler config", {
         operation: 'admin_scheduler_config_update',
-        userId: req.user?.claims?.sub,
+        userId: (req.user as any)?.claims?.sub || (req.user as any)?.id,
         updates,
         success: result.success
       });
@@ -1933,7 +1908,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       logger.error("Error updating scheduler config", error, { 
         operation: 'admin_scheduler_config_failed',
-        userId: req.user?.claims?.sub
+        userId: (req.user as any)?.claims?.sub
       });
       res.status(500).json({ 
         message: "Failed to update scheduler configuration",
@@ -1989,7 +1964,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       logger.info("Admin updated operational config", {
         operation: 'admin_operational_config_update',
-        userId: req.user?.claims?.sub,
+        userId: (req.user as any)?.claims?.sub || (req.user as any)?.id,
         updates
       });
 
@@ -2001,7 +1976,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       logger.error("Error updating operational config", error, { 
         operation: 'admin_operational_config_failed',
-        userId: req.user?.claims?.sub
+        userId: (req.user as any)?.claims?.sub
       });
       res.status(500).json({ 
         message: "Failed to update operational configuration",
@@ -2014,13 +1989,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/admin/operations/emergency-stop", strictRateLimit, isAuthenticated, isAdmin, async (req, res) => {
     try {
       const { reason } = req.body;
-      const stopReason = reason || `Emergency stop by admin ${req.user?.claims?.sub}`;
+      const stopReason = reason || `Emergency stop by admin ${(req.user as any)?.claims?.sub}`;
       
       operationalControls.emergencyStop(stopReason);
       
       logger.error("EMERGENCY STOP activated by admin", {
         operation: 'admin_emergency_stop',
-        userId: req.user?.claims?.sub,
+        userId: (req.user as any)?.claims?.sub || (req.user as any)?.id,
         reason: stopReason
       });
 
@@ -2033,7 +2008,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       logger.error("Error activating emergency stop", error, { 
         operation: 'admin_emergency_stop_failed',
-        userId: req.user?.claims?.sub
+        userId: (req.user as any)?.claims?.sub
       });
       res.status(500).json({ 
         message: "Failed to activate emergency stop",
@@ -2046,13 +2021,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/admin/operations/resume", strictRateLimit, isAuthenticated, isAdmin, async (req, res) => {
     try {
       const { reason } = req.body;
-      const resumeReason = reason || `Operations resumed by admin ${req.user?.claims?.sub}`;
+      const resumeReason = reason || `Operations resumed by admin ${(req.user as any)?.claims?.sub}`;
       
       operationalControls.resumeOperations(resumeReason);
       
       logger.info("Operations resumed by admin", {
         operation: 'admin_operations_resume',
-        userId: req.user?.claims?.sub,
+        userId: (req.user as any)?.claims?.sub || (req.user as any)?.id,
         reason: resumeReason
       });
 
@@ -2065,7 +2040,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       logger.error("Error resuming operations", error, { 
         operation: 'admin_operations_resume_failed',
-        userId: req.user?.claims?.sub
+        userId: (req.user as any)?.claims?.sub
       });
       res.status(500).json({ 
         message: "Failed to resume operations",
@@ -2097,7 +2072,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       logger.info(`Admin ${enabled ? 'enabled' : 'disabled'} site`, {
         operation: 'admin_site_toggle',
-        userId: req.user?.claims?.sub,
+        userId: (req.user as any)?.claims?.sub || (req.user as any)?.id,
         site,
         enabled,
         reason
@@ -2113,7 +2088,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       logger.error("Error toggling site", error, { 
         operation: 'admin_site_toggle_failed',
-        userId: req.user?.claims?.sub,
+        userId: (req.user as any)?.claims?.sub || (req.user as any)?.id,
         site: req.params.site
       });
       res.status(500).json({ 
@@ -2180,7 +2155,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       logger.info("Admin initiated test scraping for user", {
         operation: 'admin_test_scraper',
-        adminUserId: req.user?.claims?.sub,
+        adminUserId: (req.user as any)?.claims?.sub,
         targetUserId: userId
       });
 
@@ -2201,7 +2176,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       logger.error("Error in test scraper", error, { 
         operation: 'admin_test_scraper_failed',
-        adminUserId: req.user?.claims?.sub,
+        adminUserId: (req.user as any)?.claims?.sub,
         targetUserId: req.params.userId
       });
       res.status(500).json({ 

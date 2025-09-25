@@ -93,7 +93,8 @@ export async function setupAuth(app: Express) {
     '48f9b286-e008-48ab-8187-58819bef2085-00-1zo3nkwdvuaba.janeway.repl.co';
   
   // Combine and deduplicate domains
-  const allDomains = [...new Set([...envDomains, currentDomain])];
+  const domainsSet = new Set([...envDomains, currentDomain]);
+  const allDomains = Array.from(domainsSet);
   
   for (const domain of allDomains) {
     const strategy = new Strategy(

@@ -223,6 +223,11 @@ export class MemStorage implements IStorage {
     return this.users.get(userId);
   }
 
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const userArray = Array.from(this.users.values());
+    return userArray.find(user => user.email === email);
+  }
+
   async getAllUsers(): Promise<User[]> {
     return Array.from(this.users.values());
   }
