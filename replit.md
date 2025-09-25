@@ -95,6 +95,15 @@ All admin endpoints require authentication and admin privileges.
 
 ## Recent Changes
 
+### Cross-Domain Authentication Fix (September 25, 2025)
+- **RESOLVED: Cross-domain authentication issues between .replit.dev and .repl.co domains**
+- Implemented secure token-based cross-domain session sharing mechanism
+- Fixed authentication flow to work seamlessly across both domain variants
+- Added comprehensive security protections against open redirect and token replay attacks
+- Enhanced domain validation with strict allow-listing of legitimate Replit domains
+- Authentication now works normally without requiring workarounds or manual session management
+- **Status: Authentication system fully functional and secure across all domains**
+
 ### SMS Notifications Implementation (August 31, 2025)
 - Implemented complete SMS notification system using Resend API
 - Added phone number field to user database schema with proper database migration

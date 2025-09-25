@@ -203,30 +203,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Temporary user access route for dante@impactworks.com
-  app.get('/api/access/dante', async (req, res) => {
-    try {
-      const user = await storage.getUserByEmail('dante@impactworks.com');
-      if (user) {
-        // Create a minimal session
-        req.login({ 
-          claims: { sub: user.id, email: user.email },
-          access_token: 'temp_token',
-          expires_at: Math.floor(Date.now() / 1000) + 3600 // 1 hour
-        }, (err) => {
-          if (err) {
-            return res.status(500).json({ message: "Login setup failed" });
-          }
-          res.redirect('/dashboard');
-        });
-      } else {
-        res.status(404).json({ message: "User not found" });
-      }
-    } catch (error) {
-      logger.error("Error in access route", error);
-      res.status(500).json({ message: "Server error" });
-    }
-  });
 
   // User creation (age verification) - keeping for backwards compatibility
   app.post("/api/users", async (req, res) => {

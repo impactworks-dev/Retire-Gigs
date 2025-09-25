@@ -7,10 +7,29 @@ import type { Express, RequestHandler } from "express";
 import memoize from "memoizee";
 import connectPg from "connect-pg-simple";
 import { storage } from "./storage";
+import { randomUUID } from "crypto";
 
 if (!process.env.REPLIT_DOMAINS) {
   throw new Error("Environment variable REPLIT_DOMAINS not provided");
 }
+
+// Temporary storage for cross-domain authentication tokens
+const authTokens = new Map<string, { 
+  originalDomain: string, 
+  userClaims: any, 
+  expires: number 
+}>();
+
+// Clean up expired tokens every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  const entries = Array.from(authTokens.entries());
+  for (const [token, data] of entries) {
+    if (now > data.expires) {
+      authTokens.delete(token);
+    }
+  }
+}, 5 * 60 * 1000);
 
 const getOidcConfig = memoize(
   async () => {
@@ -115,17 +134,139 @@ export async function setupAuth(app: Express) {
   passport.deserializeUser((user: Express.User, cb) => cb(null, user));
 
   app.get("/api/login", (req, res, next) => {
-    passport.authenticate(`replitauth:${req.hostname}`, {
+    // Find the canonical .replit.dev domain from REPLIT_DOMAINS
+    const envDomains = process.env.REPLIT_DOMAINS ? process.env.REPLIT_DOMAINS.split(",") : [];
+    const canonicalDomain = envDomains.find(domain => domain.includes('.replit.dev')) || envDomains[0];
+    
+    // Get all allowed domains for validation
+    const currentDomain = envDomains.length > 0 ? 
+      envDomains[0].replace('.replit.dev', '.repl.co') : 
+      '48f9b286-e008-48ab-8187-58819bef2085-00-1zo3nkwdvuaba.janeway.repl.co';
+    const allowedDomains = new Set([...envDomains, currentDomain]);
+    
+    // If user is on .repl.co domain, validate and pass original domain for cross-domain auth
+    if (req.hostname.includes('.repl.co') && canonicalDomain) {
+      // Security: Only allow redirect to verified domains
+      if (!allowedDomains.has(req.hostname)) {
+        return res.status(400).send('Invalid domain');
+      }
+      
+      const originalDomain = encodeURIComponent(req.hostname);
+      return res.redirect(`https://${canonicalDomain}/api/login?return_domain=${originalDomain}`);
+    }
+    
+    // Validate return_domain parameter if present (security check)
+    if (req.query.return_domain) {
+      const returnDomain = decodeURIComponent(req.query.return_domain as string);
+      if (!allowedDomains.has(returnDomain)) {
+        return res.status(400).send('Invalid return domain');
+      }
+    }
+    
+    // Use canonical domain for authentication or current domain if it's already canonical
+    const authDomain = canonicalDomain || req.hostname;
+    passport.authenticate(`replitauth:${authDomain}`, {
       prompt: "login consent",
       scope: ["openid", "email", "profile", "offline_access"],
+      state: req.query.return_domain ? `return_domain=${req.query.return_domain}` : undefined,
     })(req, res, next);
   });
 
   app.get("/api/callback", (req, res, next) => {
-    passport.authenticate(`replitauth:${req.hostname}`, {
-      successReturnToOrRedirect: "/",
+    // Use canonical domain for callback authentication
+    const envDomains = process.env.REPLIT_DOMAINS ? process.env.REPLIT_DOMAINS.split(",") : [];
+    const canonicalDomain = envDomains.find(domain => domain.includes('.replit.dev')) || envDomains[0];
+    const authDomain = canonicalDomain || req.hostname;
+    
+    passport.authenticate(`replitauth:${authDomain}`, {
       failureRedirect: "/api/login",
-    })(req, res, next);
+    })(req, res, (err: any) => {
+      if (err) {
+        return res.redirect("/api/login");
+      }
+      
+      // Extract return domain from state parameter
+      const state = req.query.state as string;
+      let originalDomain: string | undefined;
+      
+      if (state && state.startsWith('return_domain=')) {
+        originalDomain = decodeURIComponent(state.split('return_domain=')[1]);
+      }
+      
+      if (originalDomain && originalDomain !== req.hostname) {
+        // Security: Validate that originalDomain is in allowed domains
+        const envDomains = process.env.REPLIT_DOMAINS ? process.env.REPLIT_DOMAINS.split(",") : [];
+        const currentDomain = envDomains.length > 0 ? 
+          envDomains[0].replace('.replit.dev', '.repl.co') : 
+          '48f9b286-e008-48ab-8187-58819bef2085-00-1zo3nkwdvuaba.janeway.repl.co';
+        const allowedDomains = new Set([...envDomains, currentDomain]);
+        
+        if (!allowedDomains.has(originalDomain)) {
+          return res.redirect("/api/login");
+        }
+        
+        // Create a secure token for cross-domain authentication
+        const token = randomUUID();
+        const userClaims = (req.user as any)?.claims;
+        
+        authTokens.set(token, {
+          originalDomain,
+          userClaims,
+          expires: Date.now() + 5 * 60 * 1000 // 5 minutes
+        });
+        
+        // Redirect to original domain with the token
+        return res.redirect(`https://${originalDomain}/api/auth/complete?token=${token}`);
+      }
+      
+      // Same domain, normal redirect
+      res.redirect("/");
+    });
+  });
+
+  // Cross-domain authentication completion endpoint
+  app.get("/api/auth/complete", async (req, res) => {
+    const { token } = req.query;
+    
+    if (!token || typeof token !== 'string') {
+      return res.redirect("/api/login");
+    }
+    
+    const authData = authTokens.get(token);
+    if (!authData || Date.now() > authData.expires) {
+      authTokens.delete(token);
+      return res.redirect("/api/login");
+    }
+    
+    // Security: Verify that current hostname matches the token's intended domain
+    if (authData.originalDomain !== req.hostname) {
+      authTokens.delete(token);
+      return res.redirect("/api/login");
+    }
+    
+    // Delete the token (single use)
+    authTokens.delete(token);
+    
+    try {
+      // Establish session on this domain
+      const userClaims = authData.userClaims;
+      await upsertUser(userClaims);
+      
+      req.login({
+        claims: userClaims,
+        access_token: 'cross_domain_token',
+        expires_at: Math.floor(Date.now() / 1000) + 3600 // 1 hour
+      }, (err) => {
+        if (err) {
+          console.error('Failed to establish cross-domain session:', err);
+          return res.redirect("/api/login");
+        }
+        res.redirect("/");
+      });
+    } catch (error) {
+      console.error('Error in cross-domain auth completion:', error);
+      res.redirect("/api/login");
+    }
   });
 
   app.get("/api/logout", (req, res) => {
