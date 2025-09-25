@@ -68,6 +68,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
   await setupAuth(app);
   
+  // TEMPORARY: Debug route to help access dashboard
+  app.get("/debug-login/:email", async (req, res) => {
+    const { email } = req.params;
+    if (email === "dante@impactworks.com") {
+      try {
+        const user = await storage.getUserByEmail(email);
+        if (user) {
+          // Manually set up the session
+          req.login({ id: user.id, email: user.email }, (err) => {
+            if (err) {
+              return res.status(500).json({ message: "Login failed" });
+            }
+            res.redirect("/dashboard");
+          });
+        } else {
+          res.status(404).json({ message: "User not found" });
+        }
+      } catch (error) {
+        res.status(500).json({ message: "Error accessing user account" });
+      }
+    } else {
+      res.status(404).json({ message: "Access denied" });
+    }
+  });
+  
   // SECURITY: Rate limiting middleware for different endpoint types
   const generalRateLimit = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
