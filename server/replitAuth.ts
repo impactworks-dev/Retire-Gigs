@@ -85,8 +85,17 @@ export async function setupAuth(app: Express) {
     verified(null, user);
   };
 
-  for (const domain of process.env
-    .REPLIT_DOMAINS!.split(",")) {
+  // Get domains from environment and add the actual current domain
+  const envDomains = process.env.REPLIT_DOMAINS ? process.env.REPLIT_DOMAINS.split(",") : [];
+  // Extract the current domain by replacing .replit.dev with .repl.co if needed
+  const currentDomain = envDomains.length > 0 ? 
+    envDomains[0].replace('.replit.dev', '.repl.co') : 
+    '48f9b286-e008-48ab-8187-58819bef2085-00-1zo3nkwdvuaba.janeway.repl.co';
+  
+  // Combine and deduplicate domains
+  const allDomains = [...new Set([...envDomains, currentDomain])];
+  
+  for (const domain of allDomains) {
     const strategy = new Strategy(
       {
         name: `replitauth:${domain}`,
@@ -97,6 +106,8 @@ export async function setupAuth(app: Express) {
       verify,
     );
     passport.use(strategy);
+    
+    console.log(`Registered auth strategy for domain: ${domain}`);
   }
 
   passport.serializeUser((user: Express.User, cb) => cb(null, user));
