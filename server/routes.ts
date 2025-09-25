@@ -26,6 +26,8 @@ import { ZodError } from "zod";
 import { malwareScannerService } from "./malwareScanner";
 import { logger } from "./logger";
 import { firecrawlService } from "./services/firecrawl";
+import { perplexityService } from "./services/perplexityService";
+import { jobParserService } from "./services/jobParserService";
 import { jobScraperService } from "./services/jobScraper";
 import { jobScheduler } from "./services/jobScheduler";
 import { operationalControls } from "./services/operationalControls";
@@ -748,6 +750,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Test Firecrawl endpoint
+  // Test Perplexity Service
+  app.post("/api/test-perplexity", isAuthenticated, isAdmin, async (req: any, res) => {
+    try {
+      logger.info("Testing Perplexity service", { operation: 'test_perplexity' });
+
+      if (!perplexityService.isServiceAvailable()) {
+        return res.status(500).json({
+          message: "Perplexity service not available - API key not configured"
+        });
+      }
+
+      // Test API connection
+      const connectionTest = await perplexityService.testConnection();
+      
+      if (!connectionTest.success) {
+        return res.status(500).json({
+          message: "Perplexity API connection test failed",
+          error: connectionTest.message
+        });
+      }
+
+      // Test job search with small sample
+      const testQuery = {
+        location: "Remote",
+        jobTypes: ["part-time"],
+        schedule: "flexible",
+        experienceLevel: "senior-friendly",
+        keywords: ["customer service"],
+        excludeKeywords: ["entry-level"]
+      };
+
+      logger.info("Testing Perplexity service with sample job search", { 
+        operation: 'test_perplexity',
+        query: testQuery
+      });
+
+      // Test job search
+      const searchResponse = await perplexityService.searchJobs(testQuery);
+      const parsedJobs = jobParserService.parseJobsFromText(searchResponse);
+      
+      const response = {
+        success: true,
+        message: "Perplexity service test completed successfully",
+        data: {
+          configured: true,
+          connectionTest: connectionTest.success,
+          sampleJobSearch: {
+            responseLength: searchResponse.length,
+            parsedJobCount: parsedJobs.length,
+            jobs: parsedJobs.slice(0, 2) // Return first 2 jobs as sample
+          }
+        }
+      };
+
+      logger.info("Perplexity test completed successfully", { 
+        operation: 'test_perplexity',
+        jobCount: parsedJobs.length,
+        success: true
+      });
+
+      res.json(response);
+    } catch (error) {
+      logger.error("Error testing Perplexity service", error, { operation: 'test_perplexity' });
+      res.status(500).json({ 
+        message: "Failed to test Perplexity service", 
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
   app.post("/api/test-firecrawl", isAuthenticated, isAdmin, async (req: any, res) => {
     try {
       // Test Firecrawl service configuration and connection
@@ -829,7 +901,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Check if job scraper service is available
       if (!jobScraperService.isServiceAvailable()) {
         return res.status(503).json({
-          message: "Job scraper service not available - Firecrawl API key not configured"
+          message: "Job scraper service not available - Perplexity API key not configured"
         });
       }
 

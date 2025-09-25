@@ -1,10 +1,31 @@
-import { firecrawlService, type JobScrapingOptions, type ScrapedJobData } from './firecrawl';
-import { storage } from '../storage';
-import { logger } from '../logger';
-import type { User, UserPreferences, InsertJobOpportunity, JobOpportunity } from '@shared/schema';
+import { perplexityService, type JobSearchQuery } from './perplexityService.js';
+import { jobParserService } from './jobParserService.js';
+import { storage } from '../storage.js';
+import { logger } from '../logger.js';
+import type { User, UserPreferences, InsertJobOpportunity, JobOpportunity } from '@shared/schema.js';
 import { randomUUID } from 'crypto';
-import { QualityMetricsTracker, type JobQualityMetrics } from './qualityMetrics';
-import { ContentSanitizer } from './contentSanitizer';
+import { QualityMetricsTracker, type JobQualityMetrics } from './qualityMetrics.js';
+import { ContentSanitizer } from './contentSanitizer.js';
+
+// Legacy types for backward compatibility
+interface ScrapedJobData {
+  title: string;
+  company: string;
+  location: string;
+  pay?: string;
+  schedule?: string;
+  description: string;
+  url?: string;
+  datePosted?: string;
+}
+
+interface JobScrapingOptions {
+  location?: string;
+  jobType?: string;
+  remote?: boolean;
+  partTime?: boolean;
+  maxResults?: number;
+}
 
 interface UserWithPreferences {
   user: User;
@@ -72,9 +93,9 @@ export class JobScraperService {
     });
 
     try {
-      // Check if Firecrawl service is configured
-      if (!firecrawlService.isConfigured()) {
-        const error = 'Firecrawl service not configured - cannot scrape jobs';
+      // Check if Perplexity service is configured
+      if (!perplexityService.isServiceAvailable()) {
+        const error = 'Perplexity service not configured - cannot scrape jobs';
         logger.error(error);
         this.currentSession.errors.push(error);
         return this.currentSession;
@@ -207,47 +228,44 @@ export class JobScraperService {
       }
 
       // Build search queries based on user preferences
-      const searchQueries = this.buildSearchQueries(preferences, user);
-      logger.info('Built search queries for user', {
+      const searchQueries = this.buildPerplexitySearchQueries(preferences, user);
+      logger.info('Built Perplexity search queries for user', {
         operation: 'scrapeJobsForUser',
         userId,
         queryCount: searchQueries.length
       });
 
-      // Scrape jobs from all configured job sites
-      const allScrapedJobs: ScrapedJobData[] = [];
+      // Search for jobs using Perplexity
+      const allJobOpportunities: InsertJobOpportunity[] = [];
 
       for (const query of searchQueries) {
-        for (const site of JOB_SITES) {
-          try {
-            const jobs = await this.scrapeJobsFromSite(site, query);
-            allScrapedJobs.push(...jobs);
-            result.scrapedCount += jobs.length;
+        try {
+          const responseText = await perplexityService.searchJobs(query);
+          const jobs = jobParserService.parseJobsFromText(responseText);
+          allJobOpportunities.push(...jobs);
+          result.scrapedCount += jobs.length;
 
-            logger.info(`Scraped jobs from ${site} for user`, {
-              operation: 'scrapeJobsForUser',
-              userId,
-              site,
-              jobCount: jobs.length,
-              query: JSON.stringify(query)
-            });
+          logger.info('Found jobs using Perplexity for user', {
+            operation: 'scrapeJobsForUser',
+            userId,
+            jobCount: jobs.length,
+            query: JSON.stringify(query)
+          });
 
-            // Add delay between API calls
-            await this.delay(500);
-          } catch (error) {
-            const errorMsg = `Failed to scrape from ${site}: ${error instanceof Error ? error.message : 'Unknown error'}`;
-            result.errors.push(errorMsg);
-            logger.error(errorMsg, error, {
-              operation: 'scrapeJobsForUser',
-              userId,
-              site
-            });
-          }
+          // Add delay between API calls
+          await this.delay(1000);
+        } catch (error) {
+          const errorMsg = `Failed to search jobs with Perplexity: ${error instanceof Error ? error.message : 'Unknown error'}`;
+          result.errors.push(errorMsg);
+          logger.error(errorMsg, error, {
+            operation: 'scrapeJobsForUser',
+            userId
+          });
         }
       }
 
-      // Process and save scraped jobs with quality tracking
-      const processingResult = await this.processAndSaveJobs(allScrapedJobs, userId, preferences);
+      // Process and save job opportunities with quality tracking
+      const processingResult = await this.processAndSaveJobOpportunities(allJobOpportunities, userId, preferences);
       result.savedCount = processingResult.savedCount;
       result.skippedCount = processingResult.skippedCount;
       result.errors.push(...processingResult.errors);
@@ -293,7 +311,88 @@ export class JobScraperService {
   }
 
   /**
-   * Process scraped jobs and save them to storage with deduplication
+   * Process job opportunities from Perplexity and save them to storage with deduplication
+   */
+  async processAndSaveJobOpportunities(
+    jobOpportunities: InsertJobOpportunity[],
+    userId: string,
+    preferences: UserPreferences
+  ): Promise<{ savedCount: number; skippedCount: number; errors: string[] }> {
+    const result = { savedCount: 0, skippedCount: 0, errors: [] as string[] };
+
+    try {
+      if (jobOpportunities.length === 0) {
+        logger.info('No job opportunities to process', {
+          operation: 'processAndSaveJobOpportunities',
+          userId
+        });
+        return result;
+      }
+
+      // Get existing jobs for deduplication
+      const existingJobs = await storage.getJobOpportunities();
+      
+      // Filter and deduplicate jobs
+      const filteredJobs = this.filterAndDeduplicateJobOpportunities(jobOpportunities, existingJobs, preferences);
+      
+      logger.info('Filtered and deduplicated job opportunities', {
+        operation: 'processAndSaveJobOpportunities',
+        userId,
+        originalCount: jobOpportunities.length,
+        filteredCount: filteredJobs.length
+      });
+
+      // Limit jobs per user to prevent overwhelming them
+      const jobsToSave = filteredJobs.slice(0, SCRAPING_CONFIG.MAX_JOBS_PER_USER);
+      result.skippedCount = filteredJobs.length - jobsToSave.length;
+
+      // Save each job
+      for (const jobOpportunity of jobsToSave) {
+        try {
+          await storage.createJobOpportunity(jobOpportunity);
+          result.savedCount++;
+
+          logger.debug('Saved job opportunity', {
+            operation: 'processAndSaveJobOpportunities',
+            userId,
+            jobTitle: jobOpportunity.title,
+            jobCompany: jobOpportunity.company
+          });
+
+        } catch (error) {
+          const errorMsg = `Failed to save job "${jobOpportunity.title}": ${error instanceof Error ? error.message : 'Unknown error'}`;
+          result.errors.push(errorMsg);
+          logger.error(errorMsg, error, {
+            operation: 'processAndSaveJobOpportunities',
+            userId,
+            jobTitle: jobOpportunity.title
+          });
+        }
+      }
+
+      logger.info('Completed processing job opportunities for user', {
+        operation: 'processAndSaveJobOpportunities',
+        userId,
+        savedCount: result.savedCount,
+        skippedCount: result.skippedCount,
+        errorCount: result.errors.length
+      });
+
+      return result;
+
+    } catch (error) {
+      const errorMsg = `Fatal error processing job opportunities: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      result.errors.push(errorMsg);
+      logger.error(errorMsg, error, {
+        operation: 'processAndSaveJobOpportunities',
+        userId
+      });
+      return result;
+    }
+  }
+
+  /**
+   * Legacy method for processing scraped jobs (kept for compatibility)
    */
   async processAndSaveJobs(
     scrapedJobs: ScrapedJobData[],
@@ -377,8 +476,8 @@ export class JobScraperService {
   /**
    * Build search queries based on user preferences
    */
-  private buildSearchQueries(preferences: UserPreferences, user: User): JobScrapingOptions[] {
-    const queries: JobScrapingOptions[] = [];
+  private buildPerplexitySearchQueries(preferences: UserPreferences, user: User): JobSearchQuery[] {
+    const queries: JobSearchQuery[] = [];
 
     // Get preferred job types
     const preferredJobTypes = Array.isArray(preferences.preferredJobTypes) 
@@ -390,53 +489,112 @@ export class JobScraperService {
       ? preferences.preferredLocations 
       : [];
 
-    // Map our job types to search terms
+    // Map our job types to search terms and keywords
     const jobTypeMapping: Record<string, string[]> = {
-      'hands-on': ['maintenance', 'repair', 'construction', 'crafts'],
-      'outdoor': ['gardening', 'landscaping', 'outdoor', 'nature'],
-      'creative': ['arts', 'crafts', 'design', 'creative'],
-      'helping': ['customer service', 'support', 'assistance', 'tutor'],
-      'social': ['community', 'events', 'social work', 'volunteer'],
-      'quiet': ['data entry', 'reading', 'library', 'bookkeeping'],
-      'tech': ['computer', 'technology', 'IT', 'software'],
-      'professional': ['office', 'administrative', 'professional', 'management']
+      'hands-on': ['maintenance', 'repair', 'construction', 'crafts', 'manual labor'],
+      'outdoor': ['gardening', 'landscaping', 'outdoor', 'nature', 'park'],
+      'creative': ['arts', 'crafts', 'design', 'creative', 'artistic'],
+      'helping': ['customer service', 'support', 'assistance', 'tutor', 'care'],
+      'social': ['community', 'events', 'social work', 'volunteer', 'people'],
+      'quiet': ['data entry', 'reading', 'library', 'bookkeeping', 'independent'],
+      'tech': ['computer', 'technology', 'IT', 'software', 'digital'],
+      'professional': ['office', 'administrative', 'professional', 'management', 'clerical']
     };
 
     // Build location string for search
-    let locationQuery = '';
+    let location = '';
     if (preferredLocations.includes('closetohome') && user.city && user.state) {
-      locationQuery = `${user.city}, ${user.state}`;
+      location = `${user.city}, ${user.state}`;
     } else if (preferredLocations.includes('remote')) {
-      locationQuery = 'remote';
+      location = 'remote work';
     }
 
-    // Create search queries for each preferred job type
-    for (const jobType of preferredJobTypes) {
-      const searchTerms = jobTypeMapping[jobType] || [jobType];
+    // Determine schedule preference
+    let schedule = 'flexible';
+    if (preferences.schedulePreference === 'daily') {
+      schedule = 'full-time or part-time';
+    } else {
+      schedule = 'part-time or flexible';
+    }
+
+    // Create search queries for each preferred job type combination
+    if (preferredJobTypes.length > 0) {
+      // Group job types for more effective searches
+      const jobTypeGroups = this.groupJobTypes(preferredJobTypes, jobTypeMapping);
       
-      for (const searchTerm of searchTerms) {
+      for (const group of jobTypeGroups) {
         queries.push({
-          jobType: searchTerm,
-          location: locationQuery,
-          remote: preferredLocations.includes('remote'),
-          partTime: preferences.schedulePreference !== 'daily', // Assume non-daily preference indicates part-time preference
-          maxResults: SCRAPING_CONFIG.MAX_JOBS_PER_SITE
+          location,
+          jobTypes: group.types,
+          schedule,
+          experienceLevel: 'senior-friendly, experienced workers welcome',
+          keywords: group.keywords,
+          excludeKeywords: ['entry-level', 'recent graduate', 'unpaid internship']
         });
       }
-    }
-
-    // If no specific preferences, create a general query
-    if (queries.length === 0) {
+    } else {
+      // If no specific preferences, create a general senior-friendly query
       queries.push({
-        jobType: 'part time',
-        location: locationQuery,
-        remote: false,
-        partTime: true,
-        maxResults: SCRAPING_CONFIG.MAX_JOBS_PER_SITE
+        location,
+        jobTypes: ['part-time', 'flexible', 'consultant'],
+        schedule,
+        experienceLevel: 'senior-friendly, mature workers',
+        keywords: ['55+', 'experienced', 'part-time', 'flexible schedule'],
+        excludeKeywords: ['entry-level', 'recent graduate', 'high-energy', 'fast-paced']
       });
     }
 
     return queries;
+  }
+
+  private groupJobTypes(jobTypes: string[], mapping: Record<string, string[]>): Array<{types: string[], keywords: string[]}> {
+    // Group related job types together for more effective searches
+    const groups: Array<{types: string[], keywords: string[]}> = [];
+    
+    // Create groups of related job types
+    const processedTypes = new Set<string>();
+    
+    for (const jobType of jobTypes) {
+      if (processedTypes.has(jobType)) continue;
+      
+      const keywords = mapping[jobType] || [jobType];
+      const group = {
+        types: [jobType],
+        keywords: [...keywords]
+      };
+      
+      // Look for related job types to group together
+      for (const otherType of jobTypes) {
+        if (otherType !== jobType && !processedTypes.has(otherType)) {
+          const otherKeywords = mapping[otherType] || [otherType];
+          const overlap = keywords.some(k => otherKeywords.includes(k));
+          
+          if (overlap || this.areRelatedJobTypes(jobType, otherType)) {
+            group.types.push(otherType);
+            group.keywords.push(...otherKeywords);
+            processedTypes.add(otherType);
+          }
+        }
+      }
+      
+      processedTypes.add(jobType);
+      groups.push(group);
+    }
+    
+    return groups;
+  }
+
+  private areRelatedJobTypes(type1: string, type2: string): boolean {
+    const relatedGroups = [
+      ['hands-on', 'outdoor'],
+      ['helping', 'social'],
+      ['quiet', 'professional'],
+      ['creative', 'professional']
+    ];
+    
+    return relatedGroups.some(group => 
+      group.includes(type1) && group.includes(type2)
+    );
   }
 
   /**
@@ -447,16 +605,12 @@ export class JobScraperService {
     
     while (retryCount < SCRAPING_CONFIG.RETRY_ATTEMPTS) {
       try {
-        switch (site) {
-          case 'indeed':
-            return await firecrawlService.scrapeIndeedJobs(options);
-          case 'aarp':
-            return await firecrawlService.scrapeAARPJobs(options);
-          case 'usajobs':
-            return await firecrawlService.scrapeUSAJobs(options);
-          default:
-            throw new Error(`Unknown job site: ${site}`);
-        }
+        // Legacy site scraping - not used with Perplexity implementation
+        logger.warn('Legacy site scraping called - this should not be used with Perplexity', {
+          operation: 'scrapeJobsFromSite',
+          site
+        });
+        return [];
       } catch (error) {
         retryCount++;
         if (retryCount >= SCRAPING_CONFIG.RETRY_ATTEMPTS) {
@@ -478,7 +632,47 @@ export class JobScraperService {
   }
 
   /**
-   * Filter and deduplicate jobs against existing jobs
+   * Filter and deduplicate job opportunities against existing jobs
+   */
+  private filterAndDeduplicateJobOpportunities(
+    jobOpportunities: InsertJobOpportunity[],
+    existingJobs: JobOpportunity[],
+    preferences: UserPreferences
+  ): InsertJobOpportunity[] {
+    const filtered: InsertJobOpportunity[] = [];
+
+    for (const jobOpportunity of jobOpportunities) {
+      // Basic validation
+      if (!this.isValidJobOpportunity(jobOpportunity)) {
+        continue;
+      }
+
+      // Check for duplicates against existing jobs
+      const isDuplicate = existingJobs.some(existingJob => 
+        this.calculateJobOpportunitySimilarity(jobOpportunity, existingJob) > SCRAPING_CONFIG.JOB_SIMILARITY_THRESHOLD
+      );
+
+      if (isDuplicate) {
+        continue;
+      }
+
+      // Check for duplicates within the current batch
+      const isDuplicateInBatch = filtered.some(filteredJob => 
+        this.calculateJobOpportunitySimilarity(jobOpportunity, filteredJob) > SCRAPING_CONFIG.JOB_SIMILARITY_THRESHOLD
+      );
+
+      if (isDuplicateInBatch) {
+        continue;
+      }
+
+      filtered.push(jobOpportunity);
+    }
+
+    return filtered;
+  }
+
+  /**
+   * Filter and deduplicate jobs against existing jobs (legacy method)
    */
   private filterAndDeduplicateJobs(
     scrapedJobs: ScrapedJobData[],
@@ -518,7 +712,27 @@ export class JobScraperService {
   }
 
   /**
-   * Validate scraped job data
+   * Validate job opportunity data
+   */
+  private isValidJobOpportunity(job: InsertJobOpportunity): boolean {
+    return !!(
+      job.title && 
+      job.company && 
+      job.description && 
+      job.location &&
+      job.pay &&
+      job.schedule &&
+      job.timeAgo &&
+      job.title.length > 3 && 
+      job.company.length > 1 && 
+      job.description.length > 10 &&
+      job.location.length > 1 &&
+      job.pay.length > 1
+    );
+  }
+
+  /**
+   * Validate scraped job data (legacy method)
    */
   private isValidScrapedJob(job: ScrapedJobData): boolean {
     return !!(
@@ -532,7 +746,37 @@ export class JobScraperService {
   }
 
   /**
-   * Calculate similarity between two jobs for deduplication
+   * Calculate similarity between job opportunities for deduplication
+   */
+  private calculateJobOpportunitySimilarity(job1: InsertJobOpportunity | JobOpportunity, job2: InsertJobOpportunity | JobOpportunity): number {
+    // Simple similarity calculation based on title and company
+    const title1 = job1.title.toLowerCase().trim();
+    const title2 = job2.title.toLowerCase().trim();
+    const company1 = job1.company.toLowerCase().trim();
+    const company2 = job2.company.toLowerCase().trim();
+
+    // Exact match
+    if (title1 === title2 && company1 === company2) {
+      return 1.0;
+    }
+
+    // Company match with similar title
+    if (company1 === company2) {
+      const titleSimilarity = this.calculateStringSimilarity(title1, title2);
+      return titleSimilarity > 0.8 ? 0.9 : titleSimilarity * 0.7;
+    }
+
+    // Similar title with different company
+    const titleSimilarity = this.calculateStringSimilarity(title1, title2);
+    if (titleSimilarity > 0.9) {
+      return titleSimilarity * 0.6;
+    }
+
+    return 0;
+  }
+
+  /**
+   * Calculate similarity between two jobs for deduplication (legacy method)
    */
   private calculateJobSimilarity(job1: ScrapedJobData | JobOpportunity, job2: ScrapedJobData | JobOpportunity): number {
     // Simple similarity calculation based on title and company
@@ -833,7 +1077,7 @@ export class JobScraperService {
    * Check if Firecrawl service is available
    */
   isServiceAvailable(): boolean {
-    return firecrawlService.isConfigured();
+    return perplexityService.isServiceAvailable();
   }
 
   /**
@@ -847,9 +1091,9 @@ export class JobScraperService {
 
     try {
       // Test Firecrawl connection first
-      const connectionTest = await firecrawlService.testConnection();
-      if (!connectionTest) {
-        throw new Error('Firecrawl service connection test failed');
+      const connectionTest = await perplexityService.testConnection();
+      if (!connectionTest.success) {
+        throw new Error(`Perplexity service connection test failed: ${connectionTest.message}`);
       }
 
       // Run the normal scraping process
