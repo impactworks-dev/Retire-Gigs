@@ -104,7 +104,9 @@ class JobParserService {
   }
 
   private parseJobSection(section: string): ParsedJob | null {
-    const lines = section.split('\n').map(line => line.trim()).filter(line => line);
+    // Pre-clean the section to remove obvious HTML/markdown artifacts
+    const cleanedSection = this.preCleanSection(section);
+    const lines = cleanedSection.split('\n').map(line => line.trim()).filter(line => line);
     
     if (lines.length < 3) {
       return null; // Not enough information for a job
@@ -211,7 +213,7 @@ class JobParserService {
       timeAgo = 'Recently posted';
     }
 
-    return {
+    const cleanedJob = {
       title: this.cleanJobField(title),
       company: this.cleanJobField(company),
       location: this.cleanJobField(location),
@@ -221,6 +223,13 @@ class JobParserService {
       timeAgo: this.cleanJobField(timeAgo),
       requirements
     };
+
+    // Validate that we have essential information and it's not garbage
+    if (!this.isValidJobData(cleanedJob)) {
+      return null;
+    }
+
+    return cleanedJob;
   }
 
   private isFieldLine(line: string): boolean {
@@ -232,8 +241,17 @@ class JobParserService {
 
   private cleanJobField(text: string): string {
     return text
-      .replace(/^[•\-*\d.\s]+/, '') // Remove bullet points and numbers
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // Remove markdown links [text](url) -> text
+      .replace(/<[^>]+>/g, '') // Remove HTML tags
+      .replace(/https?:\/\/[^\s]+/g, '') // Remove standalone URLs
+      .replace(/#{1,6}\s*/g, '') // Remove markdown headers
+      .replace(/\*{1,2}([^*]+)\*{1,2}/g, '$1') // Remove markdown bold/italic
+      .replace(/`([^`]+)`/g, '$1') // Remove markdown code
+      .replace(/^\s*[-•*+]\s+/gm, '') // Remove bullet points
+      .replace(/^\s*\d+\.\s+/gm, '') // Remove numbered lists
       .replace(/^[:\-\s]+/, '') // Remove leading colons and dashes
+      .replace(/\s+/g, ' ') // Normalize whitespace
+      .replace(/\n+/g, ' ') // Replace newlines with spaces
       .trim();
   }
 
@@ -318,6 +336,58 @@ class JobParserService {
     }
 
     return tags;
+  }
+
+  private preCleanSection(section: string): string {
+    return section
+      // Remove entire lines that are clearly navigation or UI elements
+      .replace(/^.*?(Skip to main content|View all|jobs in|Sign in|Save job|Apply now|Easily apply).*$/gim, '')
+      // Remove lines that are mostly punctuation or symbols
+      .replace(/^[|\-=+*#<>{}()\[\]\/\\]{3,}.*$/gm, '')
+      // Remove obvious Indeed/job site artifacts
+      .replace(/^\s*\|.*\|.*$/gm, '') // Table rows
+      .replace(/^.*?Indeed\.com.*$/gim, '')
+      .replace(/^.*?job search.*$/gim, '')
+      // Clean up extra whitespace
+      .replace(/\n\s*\n/g, '\n')
+      .trim();
+  }
+
+  private isValidJobData(job: ParsedJob): boolean {
+    // Check if we have minimum required fields
+    if (!job.title || job.title.length < 3) return false;
+    if (!job.company || job.company.length < 2) return false;
+    if (!job.location || job.location.length < 3) return false;
+
+    // Check for common garbage indicators
+    const suspiciousPatterns = [
+      /^(easily apply|apply now|view all|sign in|save job)$/i,
+      /^\s*[-|=+*#<>{}()\[\]\/\\]{2,}\s*$/, // Lines of symbols
+      /^.*indeed\.com.*$/i,
+      /^.*jobs? in.*$/i,
+      /^.*area$/i,
+      /^\$?\s*from\s*\$?\d+$/i, // "From $13" type entries
+    ];
+
+    // Check title for suspicious content
+    if (suspiciousPatterns.some(pattern => pattern.test(job.title))) return false;
+    if (suspiciousPatterns.some(pattern => pattern.test(job.company))) return false;
+
+    // Ensure fields don't contain HTML artifacts
+    if (job.title.includes('<') || job.title.includes('[') || job.title.includes('](')) return false;
+    if (job.company.includes('<') || job.company.includes('[') || job.company.includes('](')) return false;
+
+    return true;
+  }
+
+  private isNavigationLine(line: string): boolean {
+    const navigationPatterns = [
+      /^(skip to main content|view all|jobs in|sign in|save job|apply now|easily apply)$/i,
+      /^\s*[-|=+*#<>{}()\[\]\/\\]{2,}\s*$/,
+      /indeed\.com/i,
+      /job search/i,
+    ];
+    return navigationPatterns.some(pattern => pattern.test(line));
   }
 
   private calculateMatchScore(job: ParsedJob): string | null {
