@@ -70,7 +70,7 @@ The real-time job search system uses Perplexity API for live job discovery and O
 
 #### Required API Keys
 - `OPENAI_API_KEY` - OpenAI API key for GPT-5-mini structured parsing (model: gpt-4o-mini)
-- `PERPLEXITY_API_KEY` - Perplexity API key for live job searches (model: sonar)
+- `PERPLEXITY_API_KEY` - Perplexity API key for live job searches (model: sonar-pro)
 
 #### Service Configuration
 The services are configured in:
