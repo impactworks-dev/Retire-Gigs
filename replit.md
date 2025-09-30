@@ -94,6 +94,29 @@ The services are configured in:
 
 ## Recent Changes
 
+### Critical Bug Fixes (September 30, 2025)
+- **Fixed multiple critical bugs identified in comprehensive codebase review**
+- **server/storage.ts** - Fixed type error where job opportunity URL property had undefined vs null mismatch
+  - Solution: Explicitly normalize optional URLs to null with `url: job.url || null`
+- **server/services/jobParserService.ts** - Fixed crash when regex matches return null
+  - Solution: Made null check more explicit `if (matches !== null && matches.length > 1)`
+  - Prevents crashes in splitIntoJobSections when parsing job descriptions
+- **server/db.ts** - Fixed race condition in database initialization
+  - Solution: Added `initializationInProgress` flag to prevent concurrent initialization attempts
+  - Properly close existing pool connections before creating new ones
+  - Use finally block to ensure flag is reset even if initialization fails
+- **server/replitAuth.ts** - Completely fixed REPLIT_DOMAINS environment variable handling
+  - Solution: Changed top-level throw to console.warn (no crash on missing env var)
+  - Added `.filter(d => d.trim())` everywhere to handle empty strings from split
+  - Made currentDomain calculation safely handle empty arrays
+  - Used `.filter(Boolean)` to remove null values from domain lists
+  - **Most importantly:** Added dynamic strategy registration in /api/login and /api/callback handlers
+  - Strategies now register on-demand using req.hostname as fallback when REPLIT_DOMAINS is missing
+  - Wrapped registration in try-catch for graceful error handling
+  - **Result:** Authentication works reliably with or without REPLIT_DOMAINS configuration
+- **Testing:** All fixes validated with end-to-end tests covering authentication, job search, and database operations
+- **Status:** Application running successfully with no LSP errors or runtime crashes
+
 ### Real-Time Job Search System (September 30, 2025)
 - **Implemented real-time job search system using Perplexity and OpenAI**
 - **Backend:** Built modular `jobSearchService` that orchestrates Perplexity API searches with OpenAI GPT-5-mini structured parsing
