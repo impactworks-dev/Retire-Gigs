@@ -21,10 +21,25 @@ const poolConfig = {
 
 let pool: Pool;
 let db: ReturnType<typeof drizzle>;
+let initializationInProgress = false;
 
 // Initialize database connection with error handling
 function initializeDatabase() {
+  // Prevent concurrent initialization
+  if (initializationInProgress) {
+    console.log('Database initialization already in progress, skipping...');
+    return;
+  }
+  
+  initializationInProgress = true;
+  
   try {
+    // Close existing pool if it exists
+    if (pool) {
+      console.log('Closing existing database pool...');
+      pool.end().catch(err => console.error('Error closing existing pool:', err));
+    }
+    
     pool = new Pool(poolConfig);
     
     // Add error handling for pool events
@@ -61,6 +76,8 @@ function initializeDatabase() {
   } catch (error) {
     console.error('Failed to initialize database connection:', error);
     throw error;
+  } finally {
+    initializationInProgress = false;
   }
 }
 

@@ -69,7 +69,7 @@ class JobParserService {
 
     for (const pattern of patterns) {
       const matches = text.match(pattern);
-      if (matches && matches.length > 1) {
+      if (matches !== null && matches.length > 1) {
         sections.push(...matches);
         break;
       }

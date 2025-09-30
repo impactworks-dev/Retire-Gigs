@@ -189,6 +189,7 @@ export class MemStorage implements IStorage {
       this.jobOpportunities.set(id, {
         ...job,
         id,
+        url: job.url || null,
         createdAt: new Date(),
         matchScore: job.matchScore || null,
         isActive: job.isActive ?? true
@@ -366,6 +367,7 @@ export class MemStorage implements IStorage {
     const jobOpportunity: JobOpportunity = {
       ...job,
       id,
+      url: job.url || null,
       createdAt: new Date(),
       matchScore: job.matchScore || null,
       isActive: job.isActive ?? true
