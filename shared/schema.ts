@@ -144,6 +144,7 @@ export const jobOpportunities = pgTable("job_opportunities", {
   pay: text("pay").notNull(),
   schedule: text("schedule").notNull(),
   description: text("description").notNull(),
+  url: text("url"), // External URL to the actual job posting
   tags: jsonb("tags").notNull(), // Array of strings for matching
   matchScore: text("match_score"), // "great", "good", "potential"
   timeAgo: text("time_ago").notNull(),

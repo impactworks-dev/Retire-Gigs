@@ -32,6 +32,7 @@ import { jobScraperService } from "./services/jobScraper";
 import { jobScheduler } from "./services/jobScheduler";
 import { operationalControls } from "./services/operationalControls";
 import { QualityMetricsTracker } from "./services/qualityMetrics";
+import { jobSearchService } from "./services/jobSearchService";
 import { drizzle } from "drizzle-orm/neon-serverless";
 import { neon } from "@neondatabase/serverless";
 import path from "path";
@@ -461,6 +462,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(jobs);
     } catch (error) {
       res.status(500).json({ message: "Failed to get job matches" });
+    }
+  });
+
+  // Real-time job search endpoint - searches for jobs based on user criteria
+  app.post("/api/jobs/search", isAuthenticated, async (req: any, res) => {
+    try {
+      const { location, jobTypes, schedule, keywords } = req.body;
+
+      if (!jobSearchService.isServiceAvailable()) {
+        return res.status(503).json({ 
+          message: "Job search service is temporarily unavailable. Please check API configuration." 
+        });
+      }
+
+      logger.info('Job search request received', {
+        operation: 'job_search_api',
+        userId: req.user.claims.sub,
+        criteria: { location, jobTypes, schedule }
+      });
+
+      const jobs = await jobSearchService.searchJobs({
+        location,
+        jobTypes,
+        schedule,
+        keywords
+      });
+
+      logger.info('Job search request completed', {
+        operation: 'job_search_api',
+        userId: req.user.claims.sub,
+        jobCount: jobs.length
+      });
+
+      res.json({ jobs });
+    } catch (error) {
+      logger.error('Job search request failed', error, {
+        operation: 'job_search_api',
+        userId: req.user.claims.sub
+      });
+      res.status(500).json({ 
+        message: "Failed to search for jobs. Please try again later.",
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
     }
   });
 
