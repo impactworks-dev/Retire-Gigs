@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Clock, MapPin, Bookmark, BookmarkCheck } from "lucide-react";
+import { Clock, MapPin, Bookmark, BookmarkCheck, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -187,14 +187,28 @@ export function JobCard({ job, onViewDetails }: JobCardProps) {
               )}
             </Button>
           )}
-          <Button 
-            onClick={() => onViewDetails(job.id)}
-            size="default"
-            className="bg-primary hover:bg-blue-700 text-white text-senior-button px-6 py-3 min-h-12 rounded-lg transition-colors duration-200"
-            data-testid={`button-view-details-${job.id}`}
-          >
-            View Details
-          </Button>
+          {job.url ? (
+            <Button 
+              asChild
+              size="default"
+              className="bg-primary hover:bg-blue-700 text-white text-senior-button px-6 py-3 min-h-12 rounded-lg transition-colors duration-200"
+              data-testid={`button-apply-job-${job.id}`}
+            >
+              <a href={job.url} target="_blank" rel="noopener noreferrer">
+                Apply Now
+                <ExternalLink className="w-4 h-4 ml-2" />
+              </a>
+            </Button>
+          ) : (
+            <Button 
+              onClick={() => onViewDetails(job.id)}
+              size="default"
+              className="bg-primary hover:bg-blue-700 text-white text-senior-button px-6 py-3 min-h-12 rounded-lg transition-colors duration-200"
+              data-testid={`button-view-details-${job.id}`}
+            >
+              View Details
+            </Button>
+          )}
         </div>
       </div>
 

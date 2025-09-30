@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { Layout } from "@/components/layout";
 import { JobCard } from "@/components/job-card";
+import { JobSearchDialog } from "@/components/job-search-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -21,18 +22,22 @@ import {
   CheckCircle,
   Activity,
   Filter,
-  X
+  X,
+  RefreshCw
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
-import type { JobOpportunity, UserPreferences } from "@shared/schema";
+import type { JobOpportunity, UserPreferences, InsertJobOpportunity } from "@shared/schema";
 import headerImage from "@assets/Senior Woman Using Smartphone_1756590245643.png";
 
 export default function Dashboard() {
   const { toast } = useToast();
   const { user: authUser, isLoading: authLoading, isAuthenticated } = useAuth();
+  
+  // Search results state
+  const [searchResults, setSearchResults] = useState<InsertJobOpportunity[] | null>(null);
   
   // Filter states
   const [matchScoreFilter, setMatchScoreFilter] = useState<string>("all");
@@ -67,11 +72,27 @@ export default function Dashboard() {
     enabled: !!authUser?.id,
   });
 
+  // Determine which jobs to show (search results or default jobs)
+  // Add temporary IDs to search results for rendering
+  const displayJobs = useMemo(() => {
+    if (searchResults !== null) {
+      return searchResults.map((job, index) => ({
+        ...job,
+        id: `search-${index}-${Date.now()}`,
+        createdAt: new Date(),
+        url: job.url || null,
+        matchScore: job.matchScore || null,
+        isActive: job.isActive !== undefined ? job.isActive : true
+      }));
+    }
+    return jobs;
+  }, [searchResults, jobs]);
+
   // Filter jobs based on selected filters
   const filteredJobs = useMemo(() => {
-    if (!jobs) return [];
+    if (!displayJobs) return [];
     
-    return jobs.filter((job) => {
+    return displayJobs.filter((job) => {
       // Match Score filter
       if (matchScoreFilter !== "all" && job.matchScore !== matchScoreFilter) {
         return false;
@@ -170,6 +191,7 @@ export default function Dashboard() {
                   Your personalized job matching platform for meaningful work opportunities
                 </p>
                 <div className="flex flex-wrap gap-4">
+                  <JobSearchDialog onSearchComplete={setSearchResults} />
                   <Link href="/profile">
                     <Button
                       variant="secondary"
@@ -411,6 +433,35 @@ export default function Dashboard() {
           </Card>
         </div>
 
+        {/* Search Results Banner */}
+        {searchResults !== null && (
+          <Card className="mb-6 bg-green-50 border-green-200">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <CheckCircle className="w-5 h-5 text-green-600 mr-3" />
+                  <div>
+                    <h3 className="font-semibold text-gray-900">Search Results</h3>
+                    <p className="text-sm text-gray-600">
+                      Showing {searchResults.length} jobs from your search
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  onClick={() => setSearchResults(null)}
+                  variant="outline"
+                  size="sm"
+                  className="text-senior"
+                  data-testid="button-clear-search"
+                >
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Show All Jobs
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Job Listings Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -418,17 +469,17 @@ export default function Dashboard() {
               className="mobile-heading text-gray-900"
               data-testid="text-job-matches-title"
             >
-              Your Job Matches
+              {searchResults !== null ? 'Search Results' : 'Your Job Matches'}
             </h2>
             <p 
               className="text-senior-large text-senior-secondary"
               data-testid="text-job-matches-description"
             >
-              Based on your preferences and experience
+              {searchResults !== null ? 'Jobs matching your search criteria' : 'Based on your preferences and experience'}
             </p>
           </div>
           <Badge variant="secondary" className="text-senior px-4 py-2">
-            {filteredJobs.length} of {jobs.length} opportunities
+            {filteredJobs.length} of {displayJobs.length} opportunities
           </Badge>
         </div>
 
