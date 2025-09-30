@@ -64,36 +64,48 @@ Preferred communication style: Simple, everyday language.
 
 ## Environment Configuration
 
-### Scheduled Job Scraping Environment Variables
+### Real-Time Job Search Configuration
 
-The scheduled job scraping system supports the following environment variables for operational control:
+The real-time job search system uses Perplexity API for live job discovery and OpenAI GPT-5-mini for structured data parsing. This replaces the deprecated batch scraping system.
 
-#### Scheduler Configuration
-- `JOB_SCHEDULER_ENABLED=true|false` - Enable/disable the job scheduler (default: false for safety)
-- `JOB_SCHEDULER_FREQUENCY=daily|weekly|biweekly|monthly` - Default scheduling frequency (default: weekly)
-- `MAX_CONCURRENT_SESSIONS=1` - Maximum concurrent scraping sessions (default: 1)
-- `SESSION_TIMEOUT_MINUTES=60` - Session timeout in minutes (default: 60)
-- `TZ=America/New_York` - Timezone for scheduling (default: America/New_York)
+#### Required API Keys
+- `OPENAI_API_KEY` - OpenAI API key for GPT-5-mini structured parsing (model: gpt-4o-mini)
+- `PERPLEXITY_API_KEY` - Perplexity API key for live job searches (model: sonar)
 
-#### Operational Controls
-- `SCRAPING_KILL_SWITCH=true|false` - Global emergency kill switch (default: false)
-- `MIN_QUALITY_THRESHOLD=40` - Minimum quality threshold percentage (default: 40)
-- `MAX_JOBS_PER_SITE=50` - Maximum jobs per site per session (default: 50)
+#### Service Configuration
+The services are configured in:
+- `server/services/jobSearchService.ts` - Main orchestration service
+- `server/services/perplexityService.ts` - Perplexity API integration
+- OpenAI integration uses the standard OpenAI SDK with response_format for JSON output
 
-#### Site Controls
-- `INDEED_ENABLED=true|false` - Enable Indeed scraping (default: true)
-- `AARP_ENABLED=true|false` - Enable AARP scraping (default: true)
-- `USAJOBS_ENABLED=true|false` - Enable USAJobs scraping (default: true)
+#### Rate Limiting
+- `POST /api/jobs/search` - 10 requests per 15 minutes per IP address
+- Applies to all authenticated users to prevent API quota exhaustion
 
-#### Admin Access
-The scheduled job scraping system includes comprehensive admin endpoints available at:
-- `/api/admin/scheduler/*` - Scheduler control and status
-- `/api/admin/operations/*` - Operational controls and health monitoring
-- `/api/admin/quality/*` - Quality metrics and recommendations
+### API Endpoints
 
-All admin endpoints require authentication and admin privileges.
+#### Job Search
+- `POST /api/jobs/search` - Real-time job search endpoint
+  - Requires authentication
+  - Request body: `{ jobTitle, location, jobType, remote, partTime, schedule }`
+  - Returns: `{ jobs: JobOpportunity[] }` with URLs to external job postings
+  - Search results are temporary (not persisted) but users can save individual jobs
+  - Example: User searches for "part-time cashier in Seattle" → Perplexity finds current listings → OpenAI structures the data → Display as job cards with "Apply Now" links
 
 ## Recent Changes
+
+### Real-Time Job Search System (September 30, 2025)
+- **Implemented real-time job search system using Perplexity and OpenAI**
+- **Backend:** Built modular `jobSearchService` that orchestrates Perplexity API searches with OpenAI GPT-5-mini structured parsing
+- **API:** Created POST /api/jobs/search endpoint for dynamic, on-demand job searches with rate limiting
+- **Frontend:** Added job search dialog component (`client/src/components/job-search-dialog.tsx`) accessible from dashboard
+- **UI/UX:** Search dialog includes form validation, loading states, and success feedback
+- **Data Model:** Added URL field to jobOpportunities schema for linking to external job postings
+- **Job Cards:** Updated JobCard component to conditionally show "Apply Now" button with external links when URL is available
+- **User Flow:** Users click "Search Jobs" → enter criteria → system searches in real-time → results display as temporary cards → users can save interesting jobs
+- **Search Results:** Display temporarily without persisting to database, with dismissible banner to return to saved jobs
+- **Deprecated and archived legacy batch scraping system** - moved to archive/obsolete-batch-scraping/
+- System now focuses on real-time searches based on live user requests instead of scheduled batch scraping
 
 ### Cross-Domain Authentication Fix (September 25, 2025)
 - **RESOLVED: Cross-domain authentication issues between .replit.dev and .repl.co domains**
@@ -138,13 +150,17 @@ All admin endpoints require authentication and admin privileges.
 - Added latitude/longitude database fields for precise location data
 - Enhanced user experience with location-based job recommendations
 
-### Scheduled Job Scraping System (September 14, 2025)
-- Implemented comprehensive scheduled job scraping with cron functionality
-- Added operational guardrails including per-site caps, quality backoff, and feature flags
-- Created admin endpoints for scheduler control and operational management
-- Built quality monitoring system with metrics tracking and recommendations
-- Added emergency controls and kill switches for operational safety
-- Integrated with existing job scraping and notification systems
+### Scheduled Job Scraping System (September 14, 2025) - **DEPRECATED September 30, 2025**
+- **System replaced by real-time job search using Perplexity and OpenAI**
+- **Legacy code archived to archive/obsolete-batch-scraping/**
+  - Archived files: jobScraper.ts, jobScheduler.ts, operationalControls.ts, qualityMetrics.ts
+  - Archived tests: test-firecrawl.js, test-error-handling.js
+- **Migration notes for maintainers:**
+  - All batch scraping API endpoints have been removed from routes.ts
+  - No database schema changes required (system continues to use same jobOpportunities table)
+  - Environment variables for scheduler/operational controls are no longer used
+  - The archived code is preserved for reference but should not be reintroduced
+- **See "Real-Time Job Search System" above for current implementation**
 
 ### Database Integration (August 26, 2025)
 - Migrated from in-memory storage to PostgreSQL database using Neon
