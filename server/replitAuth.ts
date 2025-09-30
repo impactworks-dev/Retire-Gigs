@@ -10,7 +10,7 @@ import { storage } from "./storage";
 import { randomUUID } from "crypto";
 
 if (!process.env.REPLIT_DOMAINS) {
-  throw new Error("Environment variable REPLIT_DOMAINS not provided");
+  console.warn("Environment variable REPLIT_DOMAINS not provided. Using hostname-based fallback for authentication.");
 }
 
 // Temporary storage for cross-domain authentication tokens
@@ -105,15 +105,25 @@ export async function setupAuth(app: Express) {
   };
 
   // Get domains from environment and add the actual current domain
-  const envDomains = process.env.REPLIT_DOMAINS ? process.env.REPLIT_DOMAINS.split(",") : [];
-  // Extract the current domain by replacing .replit.dev with .repl.co if needed
-  const currentDomain = envDomains.length > 0 ? 
-    envDomains[0].replace('.replit.dev', '.repl.co') : 
-    '48f9b286-e008-48ab-8187-58819bef2085-00-1zo3nkwdvuaba.janeway.repl.co';
+  const envDomains = process.env.REPLIT_DOMAINS ? 
+    process.env.REPLIT_DOMAINS.split(",").filter(d => d.trim()) : 
+    [];
   
-  // Combine and deduplicate domains
-  const domainsSet = new Set([...envDomains, currentDomain]);
-  const allDomains = Array.from(domainsSet);
+  // Extract the current domain by replacing .replit.dev with .repl.co if needed
+  const currentDomain = envDomains.length > 0 && envDomains[0] ? 
+    envDomains[0].replace('.replit.dev', '.repl.co') : 
+    null;
+  
+  // Combine and deduplicate domains, filtering out null values
+  const allDomains = Array.from(new Set([...envDomains, currentDomain].filter(Boolean)));
+  
+  // If no domains are configured, use a fallback domain based on environment
+  // This ensures at least one strategy is registered for authentication to work
+  if (allDomains.length === 0) {
+    console.warn('No domains configured for authentication. Using fallback domain registration.');
+    // Use a fallback domain that will be overridden by req.hostname at request time
+    allDomains.push('localhost:5000');
+  }
   
   for (const domain of allDomains) {
     const strategy = new Strategy(
@@ -133,19 +143,18 @@ export async function setupAuth(app: Express) {
   passport.serializeUser((user: Express.User, cb) => cb(null, user));
   passport.deserializeUser((user: Express.User, cb) => cb(null, user));
 
-  app.get("/api/login", (req, res, next) => {
+  app.get("/api/login", async (req, res, next) => {
     // Find the canonical .replit.dev domain from REPLIT_DOMAINS
-    const envDomains = process.env.REPLIT_DOMAINS ? process.env.REPLIT_DOMAINS.split(",") : [];
+    const envDomains = process.env.REPLIT_DOMAINS ? 
+      process.env.REPLIT_DOMAINS.split(",").filter(d => d.trim()) : 
+      [];
     const canonicalDomain = envDomains.find(domain => domain.includes('.replit.dev')) || envDomains[0];
     
-    // Get all allowed domains for validation
-    const currentDomain = envDomains.length > 0 ? 
-      envDomains[0].replace('.replit.dev', '.repl.co') : 
-      '48f9b286-e008-48ab-8187-58819bef2085-00-1zo3nkwdvuaba.janeway.repl.co';
-    const allowedDomains = new Set([...envDomains, currentDomain]);
+    // Build allowed domains, using req.hostname as fallback if env is not configured
+    const allowedDomains = new Set([...envDomains, req.hostname]);
     
-    // If user is on .repl.co domain, validate and pass original domain for cross-domain auth
-    if (req.hostname.includes('.repl.co') && canonicalDomain) {
+    // If user is on .repl.co domain and canonicalDomain exists, redirect to canonical for auth
+    if (req.hostname.includes('.repl.co') && canonicalDomain && canonicalDomain !== req.hostname) {
       // Security: Only allow redirect to verified domains
       if (!allowedDomains.has(req.hostname)) {
         return res.status(400).send('Invalid domain');
@@ -163,22 +172,63 @@ export async function setupAuth(app: Express) {
       }
     }
     
-    // Use canonical domain for authentication or current domain if it's already canonical
+    // Use canonical domain for authentication or current domain as fallback
     const authDomain = canonicalDomain || req.hostname;
-    passport.authenticate(`replitauth:${authDomain}`, {
+    const strategyName = `replitauth:${authDomain}`;
+    
+    // Dynamically register strategy (handles empty REPLIT_DOMAINS)
+    // passport.use() replaces existing strategies, so this is safe to call multiple times
+    try {
+      const strategy = new Strategy(
+        {
+          name: strategyName,
+          config: await getOidcConfig(),
+          scope: "openid email profile offline_access",
+          callbackURL: `https://${authDomain}/api/callback`,
+        },
+        verify,
+      );
+      passport.use(strategy);
+    } catch (error) {
+      console.error(`Failed to register auth strategy for ${authDomain}:`, error);
+      return res.status(500).send('Authentication configuration error');
+    }
+    
+    passport.authenticate(strategyName, {
       prompt: "login consent",
       scope: ["openid", "email", "profile", "offline_access"],
       state: req.query.return_domain ? `return_domain=${req.query.return_domain}` : undefined,
     })(req, res, next);
   });
 
-  app.get("/api/callback", (req, res, next) => {
+  app.get("/api/callback", async (req, res, next) => {
     // Use canonical domain for callback authentication
-    const envDomains = process.env.REPLIT_DOMAINS ? process.env.REPLIT_DOMAINS.split(",") : [];
+    const envDomains = process.env.REPLIT_DOMAINS ? 
+      process.env.REPLIT_DOMAINS.split(",").filter(d => d.trim()) : 
+      [];
     const canonicalDomain = envDomains.find(domain => domain.includes('.replit.dev')) || envDomains[0];
     const authDomain = canonicalDomain || req.hostname;
+    const strategyName = `replitauth:${authDomain}`;
     
-    passport.authenticate(`replitauth:${authDomain}`, {
+    // Dynamically register strategy (handles empty REPLIT_DOMAINS)
+    // passport.use() replaces existing strategies, so this is safe to call multiple times
+    try {
+      const strategy = new Strategy(
+        {
+          name: strategyName,
+          config: await getOidcConfig(),
+          scope: "openid email profile offline_access",
+          callbackURL: `https://${authDomain}/api/callback`,
+        },
+        verify,
+      );
+      passport.use(strategy);
+    } catch (error) {
+      console.error(`Failed to register auth strategy for callback ${authDomain}:`, error);
+      return res.redirect("/api/login");
+    }
+    
+    passport.authenticate(strategyName, {
       failureRedirect: "/api/login",
     })(req, res, (err: any) => {
       if (err) {
