@@ -7,29 +7,10 @@ import type { Express, RequestHandler } from "express";
 import memoize from "memoizee";
 import connectPg from "connect-pg-simple";
 import { storage } from "./storage";
-import { randomUUID } from "crypto";
 
 if (!process.env.REPLIT_DOMAINS) {
   console.warn("Environment variable REPLIT_DOMAINS not provided. Using hostname-based fallback for authentication.");
 }
-
-// Temporary storage for cross-domain authentication tokens
-const authTokens = new Map<string, { 
-  originalDomain: string, 
-  userClaims: any, 
-  expires: number 
-}>();
-
-// Clean up expired tokens every 5 minutes
-setInterval(() => {
-  const now = Date.now();
-  const entries = Array.from(authTokens.entries());
-  for (const [token, data] of entries) {
-    if (now > data.expires) {
-      authTokens.delete(token);
-    }
-  }
-}, 5 * 60 * 1000);
 
 const getOidcConfig = memoize(
   async () => {
@@ -104,28 +85,12 @@ export async function setupAuth(app: Express) {
     verified(null, user);
   };
 
-  // Get domains from environment and add the actual current domain
+  // Register strategies for configured domains
   const envDomains = process.env.REPLIT_DOMAINS ? 
     process.env.REPLIT_DOMAINS.split(",").filter(d => d.trim()) : 
     [];
   
-  // Extract the current domain by replacing .replit.dev with .repl.co if needed
-  const currentDomain = envDomains.length > 0 && envDomains[0] ? 
-    envDomains[0].replace('.replit.dev', '.repl.co') : 
-    null;
-  
-  // Combine and deduplicate domains, filtering out null values
-  const allDomains = Array.from(new Set([...envDomains, currentDomain].filter(Boolean)));
-  
-  // If no domains are configured, use a fallback domain based on environment
-  // This ensures at least one strategy is registered for authentication to work
-  if (allDomains.length === 0) {
-    console.warn('No domains configured for authentication. Using fallback domain registration.');
-    // Use a fallback domain that will be overridden by req.hostname at request time
-    allDomains.push('localhost:5000');
-  }
-  
-  for (const domain of allDomains) {
+  for (const domain of envDomains) {
     const strategy = new Strategy(
       {
         name: `replitauth:${domain}`,
@@ -144,26 +109,20 @@ export async function setupAuth(app: Express) {
   passport.deserializeUser((user: Express.User, cb) => cb(null, user));
 
   app.get("/api/login", async (req, res, next) => {
-    // Use the current domain for authentication
-    const authDomain = req.hostname;
-    const strategyName = `replitauth:${authDomain}`;
+    const strategyName = `replitauth:${req.hostname}`;
     
-    // Dynamically register strategy for the current domain
-    try {
-      const strategy = new Strategy(
-        {
-          name: strategyName,
-          config: await getOidcConfig(),
-          scope: "openid email profile offline_access",
-          callbackURL: `https://${authDomain}/api/callback`,
-        },
-        verify,
-      );
-      passport.use(strategy);
-    } catch (error) {
-      console.error(`Failed to register auth strategy for ${authDomain}:`, error);
-      return res.status(500).send('Authentication configuration error');
-    }
+    // Dynamically register strategy for current hostname
+    // passport.use() replaces existing strategies with the same name, so this is safe
+    const strategy = new Strategy(
+      {
+        name: strategyName,
+        config: await getOidcConfig(),
+        scope: "openid email profile offline_access",
+        callbackURL: `https://${req.hostname}/api/callback`,
+      },
+      verify,
+    );
+    passport.use(strategy);
     
     passport.authenticate(strategyName, {
       prompt: "login consent",
@@ -172,82 +131,25 @@ export async function setupAuth(app: Express) {
   });
 
   app.get("/api/callback", async (req, res, next) => {
-    // Use the current domain for callback authentication
-    const authDomain = req.hostname;
-    const strategyName = `replitauth:${authDomain}`;
+    const strategyName = `replitauth:${req.hostname}`;
     
-    // Dynamically register strategy for the current domain
-    try {
-      const strategy = new Strategy(
-        {
-          name: strategyName,
-          config: await getOidcConfig(),
-          scope: "openid email profile offline_access",
-          callbackURL: `https://${authDomain}/api/callback`,
-        },
-        verify,
-      );
-      passport.use(strategy);
-    } catch (error) {
-      console.error(`Failed to register auth strategy for callback ${authDomain}:`, error);
-      return res.redirect("/api/login");
-    }
+    // Dynamically register strategy for current hostname
+    // passport.use() replaces existing strategies with the same name, so this is safe
+    const strategy = new Strategy(
+      {
+        name: strategyName,
+        config: await getOidcConfig(),
+        scope: "openid email profile offline_access",
+        callbackURL: `https://${req.hostname}/api/callback`,
+      },
+      verify,
+    );
+    passport.use(strategy);
     
     passport.authenticate(strategyName, {
+      successReturnToOrRedirect: "/",
       failureRedirect: "/api/login",
-    })(req, res, (err: any) => {
-      if (err) {
-        return res.redirect("/api/login");
-      }
-      
-      // Authentication successful, redirect to home
-      res.redirect("/");
-    });
-  });
-
-  // Cross-domain authentication completion endpoint
-  app.get("/api/auth/complete", async (req, res) => {
-    const { token } = req.query;
-    
-    if (!token || typeof token !== 'string') {
-      return res.redirect("/api/login");
-    }
-    
-    const authData = authTokens.get(token);
-    if (!authData || Date.now() > authData.expires) {
-      authTokens.delete(token);
-      return res.redirect("/api/login");
-    }
-    
-    // Security: Verify that current hostname matches the token's intended domain
-    if (authData.originalDomain !== req.hostname) {
-      authTokens.delete(token);
-      return res.redirect("/api/login");
-    }
-    
-    // Delete the token (single use)
-    authTokens.delete(token);
-    
-    try {
-      // Establish session on this domain
-      const userClaims = authData.userClaims;
-      await upsertUser(userClaims);
-      
-      req.login({
-        claims: userClaims,
-        access_token: 'cross_domain_token',
-        expires_at: Math.floor(Date.now() / 1000) + 3600 // 1 hour
-      }, (err) => {
-        if (err) {
-          console.error('Failed to establish cross-domain session:', err);
-          return res.redirect("/api/login");
-        }
-        res.redirect("/");
-      });
-    } catch (error) {
-      console.error('Error in cross-domain auth completion:', error);
-      res.redirect("/api/login");
-    }
+    })(req, res, next);
   });
 
   app.get("/api/logout", (req, res) => {
