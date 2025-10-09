@@ -4,7 +4,17 @@ import { logger } from '../logger.js';
 import type { InsertJobOpportunity } from '@shared/schema.js';
 
 // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+let openai: OpenAI | null = null;
+
+function getOpenAIClient(): OpenAI {
+  if (!openai && process.env.OPENAI_API_KEY) {
+    openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  }
+  if (!openai) {
+    throw new Error('OpenAI client not initialized - API key is missing');
+  }
+  return openai;
+}
 
 export interface JobSearchCriteria {
   location?: string;
@@ -154,7 +164,8 @@ ${perplexityResults}
 Please extract all jobs found and return them in the structured JSON format.`;
 
     try {
-      const response = await openai.chat.completions.create({
+      const client = getOpenAIClient();
+      const response = await client.chat.completions.create({
         model: "gpt-5-mini",
         messages: [
           { role: "system", content: systemPrompt },
