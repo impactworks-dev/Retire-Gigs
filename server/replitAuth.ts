@@ -144,40 +144,11 @@ export async function setupAuth(app: Express) {
   passport.deserializeUser((user: Express.User, cb) => cb(null, user));
 
   app.get("/api/login", async (req, res, next) => {
-    // Find the canonical .replit.dev domain from REPLIT_DOMAINS
-    const envDomains = process.env.REPLIT_DOMAINS ? 
-      process.env.REPLIT_DOMAINS.split(",").filter(d => d.trim()) : 
-      [];
-    const canonicalDomain = envDomains.find(domain => domain.includes('.replit.dev')) || envDomains[0];
-    
-    // Build allowed domains, using req.hostname as fallback if env is not configured
-    const allowedDomains = new Set([...envDomains, req.hostname]);
-    
-    // If user is on .repl.co domain and canonicalDomain exists, redirect to canonical for auth
-    if (req.hostname.includes('.repl.co') && canonicalDomain && canonicalDomain !== req.hostname) {
-      // Security: Only allow redirect to verified domains
-      if (!allowedDomains.has(req.hostname)) {
-        return res.status(400).send('Invalid domain');
-      }
-      
-      const originalDomain = encodeURIComponent(req.hostname);
-      return res.redirect(`https://${canonicalDomain}/api/login?return_domain=${originalDomain}`);
-    }
-    
-    // Validate return_domain parameter if present (security check)
-    if (req.query.return_domain) {
-      const returnDomain = decodeURIComponent(req.query.return_domain as string);
-      if (!allowedDomains.has(returnDomain)) {
-        return res.status(400).send('Invalid return domain');
-      }
-    }
-    
-    // Use canonical domain for authentication or current domain as fallback
-    const authDomain = canonicalDomain || req.hostname;
+    // Use the current domain for authentication
+    const authDomain = req.hostname;
     const strategyName = `replitauth:${authDomain}`;
     
-    // Dynamically register strategy (handles empty REPLIT_DOMAINS)
-    // passport.use() replaces existing strategies, so this is safe to call multiple times
+    // Dynamically register strategy for the current domain
     try {
       const strategy = new Strategy(
         {
@@ -197,21 +168,15 @@ export async function setupAuth(app: Express) {
     passport.authenticate(strategyName, {
       prompt: "login consent",
       scope: ["openid", "email", "profile", "offline_access"],
-      state: req.query.return_domain ? `return_domain=${req.query.return_domain}` : undefined,
     })(req, res, next);
   });
 
   app.get("/api/callback", async (req, res, next) => {
-    // Use canonical domain for callback authentication
-    const envDomains = process.env.REPLIT_DOMAINS ? 
-      process.env.REPLIT_DOMAINS.split(",").filter(d => d.trim()) : 
-      [];
-    const canonicalDomain = envDomains.find(domain => domain.includes('.replit.dev')) || envDomains[0];
-    const authDomain = canonicalDomain || req.hostname;
+    // Use the current domain for callback authentication
+    const authDomain = req.hostname;
     const strategyName = `replitauth:${authDomain}`;
     
-    // Dynamically register strategy (handles empty REPLIT_DOMAINS)
-    // passport.use() replaces existing strategies, so this is safe to call multiple times
+    // Dynamically register strategy for the current domain
     try {
       const strategy = new Strategy(
         {
@@ -235,41 +200,7 @@ export async function setupAuth(app: Express) {
         return res.redirect("/api/login");
       }
       
-      // Extract return domain from state parameter
-      const state = req.query.state as string;
-      let originalDomain: string | undefined;
-      
-      if (state && state.startsWith('return_domain=')) {
-        originalDomain = decodeURIComponent(state.split('return_domain=')[1]);
-      }
-      
-      if (originalDomain && originalDomain !== req.hostname) {
-        // Security: Validate that originalDomain is in allowed domains
-        const envDomains = process.env.REPLIT_DOMAINS ? process.env.REPLIT_DOMAINS.split(",") : [];
-        const currentDomain = envDomains.length > 0 ? 
-          envDomains[0].replace('.replit.dev', '.repl.co') : 
-          '48f9b286-e008-48ab-8187-58819bef2085-00-1zo3nkwdvuaba.janeway.repl.co';
-        const allowedDomains = new Set([...envDomains, currentDomain]);
-        
-        if (!allowedDomains.has(originalDomain)) {
-          return res.redirect("/api/login");
-        }
-        
-        // Create a secure token for cross-domain authentication
-        const token = randomUUID();
-        const userClaims = (req.user as any)?.claims;
-        
-        authTokens.set(token, {
-          originalDomain,
-          userClaims,
-          expires: Date.now() + 5 * 60 * 1000 // 5 minutes
-        });
-        
-        // Redirect to original domain with the token
-        return res.redirect(`https://${originalDomain}/api/auth/complete?token=${token}`);
-      }
-      
-      // Same domain, normal redirect
+      // Authentication successful, redirect to home
       res.redirect("/");
     });
   });
