@@ -9,7 +9,7 @@ import connectPg from "connect-pg-simple";
 import { storage } from "./storage";
 
 if (!process.env.REPLIT_DOMAINS) {
-  console.warn("Environment variable REPLIT_DOMAINS not provided. Using hostname-based fallback for authentication.");
+  throw new Error("Environment variable REPLIT_DOMAINS not provided");
 }
 
 const getOidcConfig = memoize(
@@ -73,7 +73,9 @@ export async function setupAuth(app: Express) {
   app.use(passport.initialize());
   app.use(passport.session());
 
+  console.log("Setting up OIDC config...");
   const config = await getOidcConfig();
+  console.log("OIDC config loaded successfully");
 
   const verify: VerifyFunction = async (
     tokens: client.TokenEndpointResponse & client.TokenEndpointResponseHelpers,
@@ -85,12 +87,10 @@ export async function setupAuth(app: Express) {
     verified(null, user);
   };
 
-  // Register strategies for configured domains
-  const envDomains = process.env.REPLIT_DOMAINS ? 
-    process.env.REPLIT_DOMAINS.split(",").filter(d => d.trim()) : 
-    [];
+  const domains = process.env.REPLIT_DOMAINS!.split(",");
+  console.log(`Registering auth strategies for domains:`, domains);
   
-  for (const domain of envDomains) {
+  for (const domain of domains) {
     const strategy = new Strategy(
       {
         name: `replitauth:${domain}`,
@@ -101,52 +101,23 @@ export async function setupAuth(app: Express) {
       verify,
     );
     passport.use(strategy);
-    
     console.log(`Registered auth strategy for domain: ${domain}`);
   }
 
   passport.serializeUser((user: Express.User, cb) => cb(null, user));
   passport.deserializeUser((user: Express.User, cb) => cb(null, user));
 
-  app.get("/api/login", async (req, res, next) => {
-    const strategyName = `replitauth:${req.hostname}`;
-    
-    // Dynamically register strategy for current hostname
-    // passport.use() replaces existing strategies with the same name, so this is safe
-    const strategy = new Strategy(
-      {
-        name: strategyName,
-        config: await getOidcConfig(),
-        scope: "openid email profile offline_access",
-        callbackURL: `https://${req.hostname}/api/callback`,
-      },
-      verify,
-    );
-    passport.use(strategy);
-    
-    passport.authenticate(strategyName, {
+  app.get("/api/login", (req, res, next) => {
+    console.log(`Login attempt - hostname: ${req.hostname}, protocol: ${req.protocol}`);
+    console.log(`Login attempt - headers:`, req.headers);
+    passport.authenticate(`replitauth:${req.hostname}`, {
       prompt: "login consent",
       scope: ["openid", "email", "profile", "offline_access"],
     })(req, res, next);
   });
 
-  app.get("/api/callback", async (req, res, next) => {
-    const strategyName = `replitauth:${req.hostname}`;
-    
-    // Dynamically register strategy for current hostname
-    // passport.use() replaces existing strategies with the same name, so this is safe
-    const strategy = new Strategy(
-      {
-        name: strategyName,
-        config: await getOidcConfig(),
-        scope: "openid email profile offline_access",
-        callbackURL: `https://${req.hostname}/api/callback`,
-      },
-      verify,
-    );
-    passport.use(strategy);
-    
-    passport.authenticate(strategyName, {
+  app.get("/api/callback", (req, res, next) => {
+    passport.authenticate(`replitauth:${req.hostname}`, {
       successReturnToOrRedirect: "/",
       failureRedirect: "/api/login",
     })(req, res, next);
