@@ -17,6 +17,9 @@ const poolConfig = {
   max: 10, // Maximum number of clients in the pool
   idleTimeoutMillis: 30000, // Close idle clients after 30 seconds
   connectionTimeoutMillis: 10000, // Connection timeout
+  ssl: {
+    rejectUnauthorized: false, // Required for Neon database
+  },
 };
 
 let pool: Pool;
