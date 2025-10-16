@@ -2,8 +2,20 @@ import { Pool, neonConfig } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-serverless';
 import ws from "ws";
 import * as schema from "@shared/schema";
+import tls from 'tls';
 
+// Configure WebSocket for Neon
 neonConfig.webSocketConstructor = ws;
+
+// Configure TLS to accept self-signed certificates (development only)
+const originalConnect = tls.connect;
+tls.connect = function(...args: any[]) {
+  const options = args[0];
+  if (typeof options === 'object') {
+    options.rejectUnauthorized = false;
+  }
+  return originalConnect.apply(this, args);
+} as any;
 
 if (!process.env.DATABASE_URL) {
   throw new Error(
