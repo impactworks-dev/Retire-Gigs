@@ -102,11 +102,13 @@ The services are configured in:
   - Resolved deployment error: "getaddrinfo EAI_AGAIN helium" caused by internal dev database inaccessibility
   - Production database now accessible from both development and deployed environments
   - Removed temporary TLS workarounds after migrating to production database
-- **Fixed deployment configuration**
+- **Fixed deployment configuration and static file serving**
   - Updated `.replit` deployment settings to use production commands
-  - Build command: `npm run build` (Vite + esbuild bundling)
-  - Run command: `npm run start` (production server from dist/)
+  - Build command: `npm run build` (Vite + esbuild bundling to dist/)
+  - Run command: `NODE_ENV=production node dist/index.js` (production server)
   - Deployment target: autoscale (for stateless web application)
+  - Fixed serveStatic path: Changed from `server/public` to `dist/public` to match Vite build output
+  - Production server now correctly serves built frontend files from `dist/public`
 - **Configured Replit Auth integration**
   - Set up Replit OAuth authentication with dynamic domain registration
   - Fixed session persistence across OAuth redirect flow
