@@ -16,6 +16,10 @@ localPort = 5000
 externalPort = 80
 
 [[ports]]
+localPort = 33883
+externalPort = 8008
+
+[[ports]]
 localPort = 33997
 externalPort = 6800
 
@@ -38,10 +42,6 @@ externalPort = 3000
 [[ports]]
 localPort = 42247
 externalPort = 3002
-
-[[ports]]
-localPort = 42519
-externalPort = 8008
 
 [[ports]]
 localPort = 42745
@@ -131,7 +131,6 @@ args = "echo \"Job notification process completed!\""
 
 [agent]
 integrations = ["javascript_log_in_with_replit:1.0.0", "perplexity_v0:1.0.0", "javascript_openai:1.0.0"]
-expertMode = true
 
 [objectStorage]
 defaultBucketID = "replit-objstore-5d15e829-8ca1-4d51-a215-0377c638b2c7"
