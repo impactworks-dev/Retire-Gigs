@@ -136,5 +136,5 @@ defaultBucketID = "replit-objstore-5d15e829-8ca1-4d51-a215-0377c638b2c7"
 
 [deployment]
 deploymentTarget = "autoscale"
-run = ["npm", "run", "start"]
 build = ["npm", "run", "build"]
+run = ["bash", "-c", "NODE_ENV=production node dist/index.js"]
