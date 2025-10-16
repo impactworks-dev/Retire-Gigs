@@ -128,7 +128,7 @@ task = "shell.exec"
 args = "echo \"Job notification process completed!\""
 
 [agent]
-integrations = ["javascript_log_in_with_replit:1.0.0", "perplexity_v0:1.0.0", "javascript_openai:1.0.0"]
+integrations = ["javascript_log_in_with_replit:1.0.0", "perplexity_v0:1.0.0", "javascript_openai:1.0.0", "javascript_database:1.0.0"]
 expertMode = true
 
 [objectStorage]

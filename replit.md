@@ -94,14 +94,19 @@ The services are configured in:
 
 ## Recent Changes
 
-### Replit Migration & SSL Fix (October 16, 2025)
+### Replit Migration & Production Database Setup (October 16, 2025)
 - **Successfully migrated application to Replit environment**
-- **Fixed critical SSL certificate validation issue with Neon database**
-  - Issue: Neon serverless adapter was encountering "self-signed certificate in certificate chain" errors during OAuth callback
-  - Root cause: TLS connections from Replit to Neon database were failing certificate validation
-  - Solution: Implemented TLS-level configuration to accept self-signed certificates in development environment
-  - Implementation: Modified `server/db.ts` to override `tls.connect()` with `rejectUnauthorized: false` for development
-  - **Status: Replit Auth OAuth flow now works successfully with database persistence**
+- **Configured Replit production PostgreSQL database for deployments**
+  - Created production-ready PostgreSQL database using Replit's managed database service
+  - Pushed existing database schema to production database using Drizzle Kit
+  - Resolved deployment error: "getaddrinfo EAI_AGAIN helium" caused by internal dev database inaccessibility
+  - Production database now accessible from both development and deployed environments
+  - Removed temporary TLS workarounds after migrating to production database
+- **Fixed deployment configuration**
+  - Updated `.replit` deployment settings to use production commands
+  - Build command: `npm run build` (Vite + esbuild bundling)
+  - Run command: `npm run start` (production server from dist/)
+  - Deployment target: autoscale (for stateless web application)
 - **Configured Replit Auth integration**
   - Set up Replit OAuth authentication with dynamic domain registration
   - Fixed session persistence across OAuth redirect flow
@@ -109,7 +114,7 @@ The services are configured in:
 - **Environment setup**
   - Installed Node.js 20 and all required dependencies
   - Configured workflows for development server
-  - Set up database connection with proper SSL handling
+  - Database: Replit-managed PostgreSQL (production-ready)
 
 ### Critical Bug Fixes (September 30, 2025)
 - **Fixed multiple critical bugs identified in comprehensive codebase review**
