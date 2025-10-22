@@ -52,6 +52,7 @@
     "@uppy/core": "^5.0.1",
     "@uppy/dashboard": "^5.0.1",
     "@uppy/react": "^5.0.2",
+    "apify-client": "^2.19.0",
     "clamscan": "^2.4.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
