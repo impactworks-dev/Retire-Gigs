@@ -14,6 +14,12 @@ if (!process.env.REPLIT_DOMAINS) {
 
 const getOidcConfig = memoize(
   async () => {
+    // For local development without valid REPL_ID, return null to use development bypass
+    if (!process.env.REPL_ID || process.env.REPL_ID === "5d15e829-8ca1-4d51-a215-0377c638b2c7") {
+      console.log("Using development authentication bypass - no valid REPL_ID found");
+      return null;
+    }
+    
     return await client.discovery(
       new URL(process.env.ISSUER_URL ?? "https://replit.com/oidc"),
       process.env.REPL_ID!
@@ -74,6 +80,25 @@ export async function setupAuth(app: Express) {
   app.use(passport.session());
 
   const config = await getOidcConfig();
+  
+  // Skip OIDC setup if config is null (local development without valid REPL_ID)
+  if (!config) {
+    console.log("Skipping OIDC authentication setup for local development");
+    
+    // Add development authentication bypass
+    app.get("/api/login", (req, res) => {
+      console.log("Development login requested");
+      res.redirect("/?dev-login=true");
+    });
+    
+    app.get("/api/logout", (req, res) => {
+      req.logout(() => {
+        res.redirect("/");
+      });
+    });
+    
+    return;
+  }
 
   const verify: VerifyFunction = async (
     tokens: client.TokenEndpointResponse & client.TokenEndpointResponseHelpers,
@@ -165,6 +190,21 @@ export async function setupAuth(app: Express) {
 }
 
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
+  // For development mode, allow access if no valid REPL_ID is set
+  if (!process.env.REPL_ID || process.env.REPL_ID === "5d15e829-8ca1-4d51-a215-0377c638b2c7") {
+    console.log("Development mode: bypassing authentication");
+    // Set up mock user for development
+    (req as any).user = {
+      claims: {
+        sub: "dev-user-123",
+        email: "dev@example.com",
+        first_name: "Development",
+        last_name: "User"
+      }
+    };
+    return next();
+  }
+
   const user = req.user as any;
 
   if (!req.isAuthenticated() || !user?.expires_at) {

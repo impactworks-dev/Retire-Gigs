@@ -50,7 +50,7 @@ export const schedulePreferenceSchema = z.enum([
 // Arrays with reasonable limits to prevent abuse
 export const preferredJobTypesSchema = z.array(jobTypeSchema)
   .min(1, "At least one job type must be selected")
-  .max(5, "Maximum 5 job types allowed")
+  .max(8, "Maximum 8 job types allowed")
   .refine(arr => arr.length === new Set(arr).size, "Duplicate job types not allowed");
 
 export const preferredLocationsSchema = z.array(locationPreferenceSchema)

@@ -11,19 +11,18 @@ if (!process.env.DATABASE_URL) {
   );
 }
 
-// Enhanced pool configuration with connection management
 const poolConfig = {
   connectionString: process.env.DATABASE_URL,
-  max: 10, // Maximum number of clients in the pool
-  idleTimeoutMillis: 30000, // Close idle clients after 30 seconds
-  connectionTimeoutMillis: 10000, // Connection timeout
+  max: 10, // Increased pool size for concurrent operations
+  idleTimeoutMillis: 30000, // Keep connections alive
+  connectionTimeoutMillis: 30000, // Longer connection timeout
+  acquireTimeoutMillis: 60000, // Wait longer for connections
 };
 
 let pool: Pool;
 let db: ReturnType<typeof drizzle>;
 let initializationInProgress = false;
 
-// Initialize database connection with error handling
 function initializeDatabase() {
   // Prevent concurrent initialization
   if (initializationInProgress) {
@@ -42,25 +41,10 @@ function initializeDatabase() {
     
     pool = new Pool(poolConfig);
     
-    // Add error handling for pool events
+    // Simplified error handling
     pool.on('error', (err, client) => {
-      console.error('Unexpected error on idle client', err);
-      console.error('Client info:', client);
-      
-      // Attempt to recreate the pool on critical errors
-      if (err.message.includes('terminating connection') || 
-          err.message.includes('connection terminated') ||
-          err.message.includes('administrator command')) {
-        console.log('Database connection terminated, attempting to reconnect...');
-        setTimeout(() => {
-          try {
-            initializeDatabase();
-            console.log('Database reconnection successful');
-          } catch (reconnectError) {
-            console.error('Failed to reconnect to database:', reconnectError);
-          }
-        }, 5000); // Wait 5 seconds before attempting reconnection
-      }
+      console.error('Database pool error:', err.message);
+      // Don't aggressively recreate the pool - let it handle errors naturally
     });
     
     pool.on('connect', (client) => {

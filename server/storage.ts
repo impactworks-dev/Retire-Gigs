@@ -26,7 +26,7 @@ import {
   newsArticles
 } from "@shared/schema";
 import { db, withDatabaseRetry } from "./db";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, or, ilike } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
 // Rate limiting for expensive operations
@@ -74,7 +74,8 @@ export interface IStorage {
   updateUserPreferences(userId: string, preferences: Partial<InsertUserPreferences>): Promise<UserPreferences>;
 
   // Job opportunities operations
-  getJobOpportunities(): Promise<JobOpportunity[]>;
+  getJobOpportunities(options?: { limit?: number; offset?: number; search?: string; location?: string }): Promise<JobOpportunity[]>;
+  getJobOpportunity(id: string): Promise<JobOpportunity | undefined>;
   getMatchingJobs(userId: string): Promise<JobOpportunity[]>;
   createJobOpportunity(job: InsertJobOpportunity): Promise<JobOpportunity>;
   updateJobOpportunity(id: string, updates: Partial<InsertJobOpportunity>): Promise<JobOpportunity>;
@@ -352,8 +353,39 @@ export class MemStorage implements IStorage {
     return updated;
   }
 
-  async getJobOpportunities(): Promise<JobOpportunity[]> {
-    return Array.from(this.jobOpportunities.values()).filter(job => job.isActive);
+  async getJobOpportunities(options?: { limit?: number; offset?: number; search?: string; location?: string }): Promise<JobOpportunity[]> {
+    let jobs = Array.from(this.jobOpportunities.values()).filter(job => job.isActive);
+
+    // Apply search filter
+    if (options?.search) {
+      const searchLower = options.search.toLowerCase();
+      jobs = jobs.filter(job => 
+        job.title.toLowerCase().includes(searchLower) ||
+        job.company.toLowerCase().includes(searchLower) ||
+        job.description.toLowerCase().includes(searchLower)
+      );
+    }
+
+    // Apply location filter
+    if (options?.location) {
+      const locationLower = options.location.toLowerCase();
+      jobs = jobs.filter(job => job.location.toLowerCase().includes(locationLower));
+    }
+
+    // Apply pagination
+    if (options?.offset) {
+      jobs = jobs.slice(options.offset);
+    }
+    if (options?.limit) {
+      jobs = jobs.slice(0, options.limit);
+    }
+
+    return jobs;
+  }
+
+  async getJobOpportunity(id: string): Promise<JobOpportunity | undefined> {
+    const job = this.jobOpportunities.get(id);
+    return job && job.isActive ? job : undefined;
   }
 
   async getMatchingJobs(userId: string): Promise<JobOpportunity[]> {
@@ -779,12 +811,49 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
-  async getJobOpportunities(): Promise<JobOpportunity[]> {
+  async getJobOpportunities(options?: { limit?: number; offset?: number; search?: string; location?: string }): Promise<JobOpportunity[]> {
     return await withDatabaseRetry(async () => {
-      return await db
+      let query = db
         .select()
         .from(jobOpportunities)
         .where(eq(jobOpportunities.isActive, true));
+
+      // Add search filter
+      if (options?.search) {
+        query = query.where(
+          or(
+            ilike(jobOpportunities.title, `%${options.search}%`),
+            ilike(jobOpportunities.company, `%${options.search}%`),
+            ilike(jobOpportunities.description, `%${options.search}%`)
+          )
+        );
+      }
+
+      // Add location filter
+      if (options?.location) {
+        query = query.where(ilike(jobOpportunities.location, `%${options.location}%`));
+      }
+
+      // Add pagination
+      if (options?.limit) {
+        query = query.limit(options.limit);
+      }
+      if (options?.offset) {
+        query = query.offset(options.offset);
+      }
+
+      return await query;
+    });
+  }
+
+  async getJobOpportunity(id: string): Promise<JobOpportunity | undefined> {
+    return await withDatabaseRetry(async () => {
+      const [job] = await db
+        .select()
+        .from(jobOpportunities)
+        .where(and(eq(jobOpportunities.id, id), eq(jobOpportunities.isActive, true)))
+        .limit(1);
+      return job;
     });
   }
 
