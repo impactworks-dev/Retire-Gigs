@@ -20,13 +20,10 @@ export function Layout({ children }: LayoutProps) {
 
   const handleLogout = async () => {
     try {
-      // Clear React Query cache first
       queryClient.clear();
       
-      // Clear localStorage
       localStorage.clear();
 
-      // Clear all cookies comprehensively
       const cookiesToRemove = [
         'connect.sid',
         'replit_authed',
