@@ -474,7 +474,10 @@ export default function Dashboard() {
                   try {
                     const response = await fetch("/api/test-notifications", {
                       method: "POST",
-                      headers: { "Content-Type": "application/json" }
+                      headers: { 
+                        "Content-Type": "application/json",
+                        "Accept": "application/json"
+                      }
                     });
                     if (response.ok) {
                       toast({

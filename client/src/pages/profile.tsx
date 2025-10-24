@@ -251,8 +251,38 @@ export default function Profile() {
   const handleLogout = () => {
     // Clear React Query cache
     queryClient.clear();
+    
     // Clear localStorage
     localStorage.clear();
+    
+    // Clear all cookies
+    const cookiesToRemove = [
+      'connect.sid',
+      'replit_authed',
+      'ttcsid',
+      'ttcsid_D004GE3C77U8PIVD',
+      'sessionid',
+      'auth_token',
+      'csrf_token'
+    ];
+    
+    cookiesToRemove.forEach(cookie => {
+      // Clear for current path
+      document.cookie = `${cookie}=; Max-Age=0; path=/;`;
+      // Clear for root domain
+      document.cookie = `${cookie}=; Max-Age=0; path=/; domain=${window.location.hostname};`;
+      // Clear for parent domain (in case of subdomain)
+      const parentDomain = window.location.hostname.split('.').slice(-2).join('.');
+      if (parentDomain !== window.location.hostname) {
+        document.cookie = `${cookie}=; Max-Age=0; path=/; domain=.${parentDomain};`;
+      }
+    });
+    
+    // Clear all cookies (fallback)
+    document.cookie.split(";").forEach(function(c) { 
+      document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"); 
+    });
+    
     // Redirect to logout endpoint
     window.location.href = "/login";
   };

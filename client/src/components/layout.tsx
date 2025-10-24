@@ -20,25 +20,40 @@ export function Layout({ children }: LayoutProps) {
 
   const handleLogout = async () => {
     try {
-      // Clear React Query cache first
       queryClient.clear();
       
-      // Clear localStorage
       localStorage.clear();
 
-      // Clear cookies
       const cookiesToRemove = [
         'connect.sid',
         'replit_authed',
         'ttcsid',
         'ttcsid_D004GE3C77U8PIVD',
+        'sessionid',
+        'auth_token',
+        'csrf_token'
       ];
+      
       cookiesToRemove.forEach(cookie => {
+        // Clear for current path
         document.cookie = `${cookie}=; Max-Age=0; path=/;`;
+        // Clear for root domain
+        document.cookie = `${cookie}=; Max-Age=0; path=/; domain=${window.location.hostname};`;
+        // Clear for parent domain (in case of subdomain)
+        const parentDomain = window.location.hostname.split('.').slice(-2).join('.');
+        if (parentDomain !== window.location.hostname) {
+          document.cookie = `${cookie}=; Max-Age=0; path=/; domain=.${parentDomain};`;
+        }
+      });
+      
+      // Clear all cookies (fallback method)
+      document.cookie.split(";").forEach(function(c) { 
+        document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"); 
       });
 
       // Call logout endpoint
       window.location.href = "/api/logout";
+     window.location.href = "/login";
     } catch (error) {
       // If anything fails, still redirect
       window.location.href = "/api/logout";

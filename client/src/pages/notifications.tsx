@@ -53,7 +53,10 @@ export default function Notifications() {
     mutationFn: async (updates: Partial<UserPreferences>) => {
       const response = await fetch(`/api/preferences/${authUser?.id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
         body: JSON.stringify(updates),
       });
       if (!response.ok) throw new Error("Failed to update preferences");
@@ -80,7 +83,10 @@ export default function Notifications() {
     mutationFn: async (updates: { phoneNumber?: string }) => {
       const response = await fetch(`/api/users/${authUser?.id}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
         body: JSON.stringify(updates),
       });
       if (!response.ok) throw new Error("Failed to update user profile");
@@ -103,7 +109,10 @@ export default function Notifications() {
     mutationFn: async () => {
       const response = await fetch("/api/test-email", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
       });
       if (!response.ok) throw new Error("Failed to send test email");
       return response.json();
@@ -131,7 +140,10 @@ export default function Notifications() {
       }
       const response = await fetch("/api/test-sms", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
         body: JSON.stringify({ phoneNumber }),
       });
       if (!response.ok) throw new Error("Failed to send test SMS");
