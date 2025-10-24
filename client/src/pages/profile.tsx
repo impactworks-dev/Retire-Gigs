@@ -248,43 +248,83 @@ export default function Profile() {
     }
   };
 
-  const handleLogout = () => {
-    // Clear React Query cache
-    queryClient.clear();
-    
-    // Clear localStorage
-    localStorage.clear();
-    
-    // Clear all cookies
-    const cookiesToRemove = [
-      'connect.sid',
-      'replit_authed',
-      'ttcsid',
-      'ttcsid_D004GE3C77U8PIVD',
-      'sessionid',
-      'auth_token',
-      'csrf_token'
-    ];
-    
-    cookiesToRemove.forEach(cookie => {
-      // Clear for current path
-      document.cookie = `${cookie}=; Max-Age=0; path=/;`;
-      // Clear for root domain
-      document.cookie = `${cookie}=; Max-Age=0; path=/; domain=${window.location.hostname};`;
-      // Clear for parent domain (in case of subdomain)
-      const parentDomain = window.location.hostname.split('.').slice(-2).join('.');
-      if (parentDomain !== window.location.hostname) {
-        document.cookie = `${cookie}=; Max-Age=0; path=/; domain=.${parentDomain};`;
+  const handleLogout = async () => {
+    try {
+      // Clear React Query cache
+      queryClient.clear();
+      
+      // Clear localStorage
+      localStorage.clear();
+      
+      // Clear sessionStorage
+      sessionStorage.clear();
+      
+      // Clear all cookies
+      const cookiesToRemove = [
+        'connect.sid',
+        'replit_authed',
+        'ttcsid',
+        'ttcsid_D004GE3C77U8PIVD',
+        'sessionid',
+        'auth_token',
+        'csrf_token'
+      ];
+      
+      cookiesToRemove.forEach(cookie => {
+        // Clear for current path
+        document.cookie = `${cookie}=; Max-Age=0; path=/;`;
+        // Clear for root domain
+        document.cookie = `${cookie}=; Max-Age=0; path=/; domain=${window.location.hostname};`;
+        // Clear for parent domain (in case of subdomain)
+        const parentDomain = window.location.hostname.split('.').slice(-2).join('.');
+        if (parentDomain !== window.location.hostname) {
+          document.cookie = `${cookie}=; Max-Age=0; path=/; domain=.${parentDomain};`;
+        }
+      });
+      
+      // Clear all cookies (fallback)
+      document.cookie.split(";").forEach(function(c) { 
+        document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"); 
+      });
+      
+      // Call server logout endpoint FIRST
+      try {
+        const response = await fetch('/api/logout', {
+          method: 'GET',
+          credentials: 'include'
+        });
+        
+        if (!response.ok) {
+          console.warn('Server logout failed:', response.status);
+        }
+      } catch (fetchError) {
+        console.warn('Server logout call failed:', fetchError);
       }
-    });
-    
-    // Clear all cookies (fallback)
-    document.cookie.split(";").forEach(function(c) { 
-      document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"); 
-    });
-    
-    // Redirect to logout endpoint
-    window.location.href = "/login";
+
+      // Clear service worker cache
+      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+        try {
+          const messageChannel = new MessageChannel();
+          messageChannel.port1.onmessage = (event) => {
+            console.log('Service worker cache cleared:', event.data);
+          };
+          navigator.serviceWorker.controller.postMessage(
+            { type: 'CLEAR_CACHE' },
+            [messageChannel.port2]
+          );
+        } catch (swError) {
+          console.warn('Failed to clear service worker cache:', swError);
+        }
+      }
+      
+      // Force hard redirect with cache busting using replace
+      const timestamp = Date.now();
+      window.location.replace(`/?logout=true&_=${timestamp}`);
+    } catch (error) {
+      console.error('Logout error:', error);
+      // Force redirect even if cleanup fails
+      window.location.replace("/?logout=true");
+    }
   };
 
   if (authLoading) {

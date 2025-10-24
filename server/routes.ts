@@ -65,6 +65,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
   await setupAuth(app);
   
+  // Cache control middleware for auth endpoints
+  app.use(['/api/login', '/api/logout', '/api/callback', '/api/auth'], (req, res, next) => {
+    res.set({
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+      'Surrogate-Control': 'no-store'
+    });
+    next();
+  });
+  
   // SECURITY: Rate limiting middleware for different endpoint types
   // More lenient limits for development, stricter for production
   const isDevelopment = process.env.NODE_ENV === 'development';
@@ -307,23 +318,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // JSON Logout endpoint for API clients
-  // app.post('/api/auth/logout', (req, res) => {
-  //   req.logout(() => {
-  //     res.json({ message: "Logged out successfully" });
-  //   });
-  // });
-
-  // Browser logout endpoint for redirects
-  app.get('/api/logout', (req, res) => {
-    req.logout(() => {
-      // Redirect to login page after logout
-      res.redirect('/login');
-    });
-  });
 
 
-  // User creation (age verification) - keeping for backwards compatibility
   app.post("/api/users", async (req, res) => {
     try {
       const userData = insertUserSchema.parse(req.body);
@@ -338,7 +334,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Update user profile information
   app.patch("/api/users/:userId", isAuthenticated, async (req: any, res) => {
     try {
       const { userId } = req.params;

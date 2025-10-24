@@ -28,26 +28,84 @@ export function Layout({ children }: LayoutProps) {
   const { isAuthenticated, user } = useAuth();
   const queryClient = useQueryClient();
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     try {
-      // Clear local storage
-      localStorage.clear();
+      // Call server logout endpoint FIRST to clear server session
+      try {
+        const response = await fetch('/api/logout', {
+          method: 'GET',
+          credentials: 'include'
+        });
+        
+        // If server logout fails, we'll still continue with client cleanup
+        if (!response.ok) {
+          console.warn('Server logout failed:', response.status);
+        }
+      } catch (fetchError) {
+        console.warn('Server logout call failed:', fetchError);
+      }
+
+      // Clear service worker cache
+      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+        try {
+          const messageChannel = new MessageChannel();
+          messageChannel.port1.onmessage = (event) => {
+            console.log('Service worker cache cleared:', event.data);
+          };
+          navigator.serviceWorker.controller.postMessage(
+            { type: 'CLEAR_CACHE' },
+            [messageChannel.port2]
+          );
+        } catch (swError) {
+          console.warn('Failed to clear service worker cache:', swError);
+        }
+      }
 
       // Clear React Query cache
       queryClient.clear();
+      
+      // Clear local storage
+      localStorage.clear();
+      
+      // Clear session storage
+      sessionStorage.clear();
 
-      // Clear all cookies
+      // Clear all cookies on client side
+      const cookiesToClear = [
+        'connect.sid',
+        'replit_authed',
+        'ttcsid',
+        'sessionid',
+        'auth_token',
+        'csrf_token'
+      ];
+
+      cookiesToClear.forEach(cookieName => {
+        // Clear for current path
+        document.cookie = `${cookieName}=; Max-Age=0; path=/;`;
+        // Clear for current domain
+        document.cookie = `${cookieName}=; Max-Age=0; path=/; domain=${window.location.hostname};`;
+        // Clear for parent domain
+        const parentDomain = window.location.hostname.split('.').slice(-2).join('.');
+        if (parentDomain !== window.location.hostname) {
+          document.cookie = `${cookieName}=; Max-Age=0; path=/; domain=.${parentDomain};`;
+        }
+      });
+
+      // Clear all cookies (fallback method)
       document.cookie.split(";").forEach((c) => {
         document.cookie = c
           .replace(/^ +/, "")
           .replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
       });
 
-      // Redirect to login page
-      window.location.href = "/login";
+      // Use window.location.replace to prevent caching and ensure redirect
+      const timestamp = Date.now();
+      window.location.replace(`/?logout=true&_=${timestamp}`);
     } catch (error) {
       console.error("Logout cleanup failed:", error);
-      window.location.href = "/login";
+      // Force redirect even if cleanup fails
+      window.location.replace("/?logout=true");
     }
   };
 

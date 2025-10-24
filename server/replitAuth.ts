@@ -69,9 +69,11 @@ export function getSession() {
     store: sessionStore,
     resave: false,
     saveUninitialized: false,
+    rolling: true, // Reset expiration on activity
+    name: 'connect.sid', // Explicit session name
     cookie: {
       httpOnly: true,
-      secure: true,
+      secure: process.env.NODE_ENV === 'production', // Only secure in production
       sameSite: "lax",
       maxAge: sessionTtl,
     },
@@ -362,6 +364,73 @@ export async function setupAuth(app: Express) {
     } catch (error) {
       console.error("Error in cross-domain auth completion:", error);
       res.redirect("/api/login");
+    }
+  });
+
+  // Logout endpoint
+  app.get("/api/logout", async (req, res) => {
+    const user = req.user as any;
+    
+    try {
+      // Clear the session
+      req.session.destroy((err) => {
+        if (err) {
+          console.error('Session destruction error:', err);
+        }
+      });
+
+      // Log out from passport
+      req.logout((err) => {
+        if (err) {
+          console.error('Passport logout error:', err);
+        }
+      });
+
+      // Clear all authentication cookies
+      const cookiesToClear = [
+        'connect.sid',
+        'replit_authed', 
+        'ttcsid',
+        'sessionid',
+        'auth_token',
+        'csrf_token'
+      ];
+
+      cookiesToClear.forEach(cookieName => {
+        res.clearCookie(cookieName, { 
+          path: '/',
+          domain: req.hostname,
+          httpOnly: true,
+          secure: true,
+          sameSite: 'lax'
+        });
+        
+        // Also clear for parent domain if on subdomain
+        const parentDomain = req.hostname.split('.').slice(-2).join('.');
+        if (parentDomain !== req.hostname) {
+          res.clearCookie(cookieName, { 
+            path: '/',
+            domain: `.${parentDomain}`,
+            httpOnly: true,
+            secure: true,
+            sameSite: 'lax'
+          });
+        }
+      });
+
+      // Set cache control headers to prevent caching
+      res.set({
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+        'Surrogate-Control': 'no-store'
+      });
+
+      // Redirect to login page
+      res.redirect('/login');
+    } catch (error) {
+      console.error('Logout error:', error);
+      res.redirect('/login');
     }
   });
 }

@@ -11,7 +11,7 @@ const urlsToCache = [
   '/icons/icon-384x384.png',
   '/icons/icon-512x512.png'
 ];
-const CACHE_NAME = 'retiree-gigs-v2';
+const CACHE_NAME = 'retiree-gigs-v3';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -45,6 +45,33 @@ self.addEventListener('fetch', (event) => {
   // Skip non-GET requests and chrome-extension requests
   if (event.request.method !== 'GET' || event.request.url.startsWith('chrome-extension://')) {
     return;
+  }
+
+  // Skip caching for authentication and API routes
+  const url = new URL(event.request.url);
+  const skipCachePatterns = [
+    '/api/',
+    '/login',
+    '/logout',
+    '?logout=true',
+    '?_='  // Cache busting parameter
+  ];
+  
+  const shouldSkipCache = skipCachePatterns.some(pattern => 
+    url.pathname.includes(pattern) || url.search.includes(pattern)
+  );
+  
+  if (shouldSkipCache) {
+    // Always fetch fresh for auth/API routes
+    return event.respondWith(
+      fetch(event.request).catch((error) => {
+        console.log('Fetch failed for auth route:', error);
+        if (event.request.mode === 'navigate') {
+          return caches.match('/offline.html');
+        }
+        return new Response('Offline', { status: 503 });
+      })
+    );
   }
 
   event.respondWith(
@@ -173,6 +200,29 @@ self.addEventListener('notificationclick', (event) => {
     // Open the app to the jobs page
     event.waitUntil(
       clients.openWindow('/')
+    );
+  }
+});
+
+// Handle messages from the main thread
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'CLEAR_CACHE') {
+    event.waitUntil(
+      caches.keys().then((cacheNames) => {
+        return Promise.all(
+          cacheNames.map((cacheName) => {
+            console.log('Clearing cache:', cacheName);
+            return caches.delete(cacheName);
+          })
+        );
+      }).then(() => {
+        console.log('All caches cleared');
+        // Notify the client that cache has been cleared
+        event.ports[0].postMessage({ success: true });
+      }).catch(error => {
+        console.error('Failed to clear cache:', error);
+        event.ports[0].postMessage({ success: false, error: error.message });
+      })
     );
   }
 });
