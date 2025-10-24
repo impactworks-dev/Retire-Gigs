@@ -139,7 +139,10 @@ export default function Signup() {
       // Create account
       const signupResponse = await fetch("/api/auth/signup", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
         body: JSON.stringify({
           email,
           password,
@@ -161,7 +164,10 @@ export default function Signup() {
       // Save preferences
       const preferencesResponse = await fetch("/api/preferences", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
         body: JSON.stringify({
           userId: user.id,
           preferredJobTypes,
