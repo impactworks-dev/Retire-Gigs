@@ -365,29 +365,7 @@ export async function setupAuth(app: Express) {
     }
   });
 
-  app.get("/api/logout", async (req, res) => {
-    const user = req.user as any;
 
-    req.logout(() => {
-      // If the user has OIDC tokens (Replit login), redirect to OIDC logout
-      if (user?.access_token && user?.expires_at) {
-        try {
-          const logoutUrl = client.buildEndSessionUrl(config, {
-            client_id: process.env.REPL_ID!,
-            post_logout_redirect_uri: `${req.protocol}://${req.hostname}`,
-          }).href;
-          res.redirect(logoutUrl);
-        } catch (error) {
-          // If OIDC logout fails, just redirect to home
-          res.redirect("/");
-        }
-      } else {
-        // For email/password users, just redirect to home
-        res.redirect("/");
-      }
-    });
-  });
-}
 
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
   const user = req.user as any;

@@ -308,9 +308,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // JSON Logout endpoint for API clients
-  app.post('/api/auth/logout', (req, res) => {
+  // app.post('/api/auth/logout', (req, res) => {
+  //   req.logout(() => {
+  //     res.json({ message: "Logged out successfully" });
+  //   });
+  // });
+
+  // Browser logout endpoint for redirects
+  app.get('/api/logout', (req, res) => {
     req.logout(() => {
-      res.json({ message: "Logged out successfully" });
+      // Redirect to login page after logout
+      res.redirect('/login');
     });
   });
 

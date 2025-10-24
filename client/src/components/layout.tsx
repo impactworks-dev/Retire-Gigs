@@ -1,4 +1,14 @@
-import { Menu, Briefcase, User, LogOut, Bookmark, BookmarkCheck, FileText, Newspaper, Bell } from "lucide-react";
+import {
+  Menu,
+  Briefcase,
+  User,
+  LogOut,
+  Bookmark,
+  BookmarkCheck,
+  FileText,
+  Newspaper,
+  Bell,
+} from "lucide-react";
 import { Link } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -18,23 +28,25 @@ export function Layout({ children }: LayoutProps) {
   const { isAuthenticated, user } = useAuth();
   const queryClient = useQueryClient();
 
-  const handleLogout = async () => {
+  const handleLogout = () => {
     try {
-      // Call logout endpoint to destroy session
-      await fetch("/api/auth/logout", {
-        method: "POST",
-        credentials: "include"
-      });
-      
-      // Clear local state
-      queryClient.clear();
+      // Clear local storage
       localStorage.clear();
-      
+
+      // Clear React Query cache
+      queryClient.clear();
+
+      // Clear all cookies
+      document.cookie.split(";").forEach((c) => {
+        document.cookie = c
+          .replace(/^ +/, "")
+          .replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+      });
+
       // Redirect to login page
       window.location.href = "/login";
     } catch (error) {
-      console.error("Logout error:", error);
-      // Even if logout fails, redirect to login
+      console.error("Logout cleanup failed:", error);
       window.location.href = "/login";
     }
   };
@@ -50,7 +62,9 @@ export function Layout({ children }: LayoutProps) {
                 <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
                   <Briefcase className="w-6 h-6 text-white" />
                 </div>
-                <h1 className="mobile-subheading text-gray-900">Retiree Gigs</h1>
+                <h1 className="mobile-subheading text-gray-900">
+                  Retiree Gigs
+                </h1>
               </div>
             </Link>
 
@@ -128,9 +142,7 @@ export function Layout({ children }: LayoutProps) {
       </header>
 
       {/* Main Content */}
-      <main>
-        {children}
-      </main>
+      <main>{children}</main>
     </div>
   );
 }
