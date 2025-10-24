@@ -52,11 +52,11 @@ export function Layout({ children }: LayoutProps) {
       });
 
       // Call logout endpoint
-      window.location.href = "/api/logout";
+   
      window.location.href = "/login";
     } catch (error) {
       // If anything fails, still redirect
-      window.location.href = "/api/logout";
+      window.location.href = "/login";
     }
   };
 
