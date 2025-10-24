@@ -13,7 +13,6 @@ const urlsToCache = [
 ];
 const CACHE_NAME = 'retiree-gigs-v2';
 
-// Install event - cache resources
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)

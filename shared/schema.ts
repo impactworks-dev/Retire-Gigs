@@ -3,7 +3,7 @@ import { pgTable, text, varchar, jsonb, timestamp, boolean, index } from "drizzl
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// Define explicit schemas for resume JSONB fields to ensure type safety
+// Define schema explicit schemas for resume JSONB fields to ensure type safety
 export const skillSchema = z.string().min(1, "Skill cannot be empty");
 export const skillsArraySchema = z.array(skillSchema);
 

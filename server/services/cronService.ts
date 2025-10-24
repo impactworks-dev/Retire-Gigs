@@ -22,7 +22,7 @@ export class CronService {
 
     logger.info('Starting cron service for automatic job scraping');
 
-    // Schedule job scraping every day at 9 AM
+    // Schedule job scraping every day  9 AM
     cron.schedule('0 9 * * *', async () => {
       await this.scrapeJobs();
     }, {

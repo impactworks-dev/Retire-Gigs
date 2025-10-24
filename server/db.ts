@@ -13,7 +13,7 @@ if (!process.env.DATABASE_URL) {
 
 const poolConfig = {
   connectionString: process.env.DATABASE_URL,
-  max: 10, // Increased pool size for concurrent operations
+  max: 10, 
   idleTimeoutMillis: 30000, // Keep connections alive
   connectionTimeoutMillis: 30000, // Longer connection timeout
   acquireTimeoutMillis: 60000, // Wait longer for connections

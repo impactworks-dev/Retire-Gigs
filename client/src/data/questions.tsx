@@ -26,7 +26,7 @@ import {
   Mail
 } from "lucide-react";
 import type { Question } from "@/types/questionnaire";
-
+//data
 export const questions: Question[] = [
   {
     id: 1,

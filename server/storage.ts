@@ -29,7 +29,7 @@ import { db, withDatabaseRetry } from "./db";
 import { eq, and, sql, or, ilike } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
-// Rate limiting for expensive operations
+//  limiting for expensive operations
 class RateLimiter {
   private operations: Map<string, number[]> = new Map();
   private readonly maxOperations = 10; // Max operations per window

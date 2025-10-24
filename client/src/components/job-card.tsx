@@ -21,7 +21,6 @@ export function JobCard({ job, onViewDetails }: JobCardProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Check if job is saved
   const { data: savedData } = useQuery<SavedJobCheckResponse>({
     queryKey: ["/api/saved-jobs/check", job.id],
     enabled: !!isAuthenticated && !!user?.id,
@@ -29,7 +28,7 @@ export function JobCard({ job, onViewDetails }: JobCardProps) {
   
   const isSaved = savedData?.isSaved || false;
 
-  // Save job mutation
+ 
   const saveJobMutation = useMutation({
     mutationFn: async () => {
       const response = await apiRequest("POST", "/api/saved-jobs", { jobId: job.id });
