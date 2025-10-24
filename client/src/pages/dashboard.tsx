@@ -76,7 +76,6 @@ export default function Dashboard() {
     );
   }
 
-  // Don't render dashboard if not authenticated
   if (!isAuthenticated) {
     return (
       <Layout>

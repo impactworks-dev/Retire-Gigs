@@ -51,7 +51,6 @@ export default function Profile() {
     }
   }, [isAuthenticated, authLoading, toast]);
 
-  // Fetch user preferences
   const { data: preferences } = useQuery<UserPreferences>({
     queryKey: ["/api/preferences", authUser?.id],
     enabled: !!authUser?.id,

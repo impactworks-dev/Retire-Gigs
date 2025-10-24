@@ -35,7 +35,6 @@ import { neon } from "@neondatabase/serverless";
 import path from "path";
 import fs from "fs";
 
-// Helper function to format Zod validation errors into user-friendly messages
 function formatZodError(error: ZodError): { message: string; errors?: Record<string, string> } {
   const fieldErrors: Record<string, string> = {};
   let hasFieldErrors = false;

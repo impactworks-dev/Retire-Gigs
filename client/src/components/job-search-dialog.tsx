@@ -132,7 +132,7 @@ export function JobSearchDialog({ onSearchComplete }: JobSearchDialogProps) {
             />
           </div>
 
-          {/* Keywords */}
+
           <div className="space-y-2">
             <Label htmlFor="keywords" className="text-senior-large">
               Keywords (comma-separated)

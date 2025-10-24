@@ -15,7 +15,6 @@ export interface JobData {
   source: string;
   createdAt?: Date;
   updatedAt?: Date;
-  // Required database fields
   pay: string;
   schedule: string;
   tags: string[];
