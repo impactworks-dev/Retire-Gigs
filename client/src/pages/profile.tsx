@@ -250,7 +250,12 @@ export default function Profile() {
   };
 
   const handleLogout = () => {
-    window.location.href = "/api/logout";
+    // Clear React Query cache
+    queryClient.clear();
+    // Clear localStorage
+    localStorage.clear();
+    // Redirect to logout endpoint
+    window.location.href = "/login";
   };
 
   if (authLoading) {
@@ -596,7 +601,6 @@ export default function Profile() {
                   { id: "helping", label: "Helping Others", description: "Teaching, mentoring, care services" },
                   { id: "creative", label: "Creative Work", description: "Arts, crafts, design projects" },
                   { id: "professional", label: "Professional", description: "Office work, consulting, admin" },
-                  { id: "hands-on", label: "Hands-on Work", description: "Building, repairs, manual tasks" },
                   { id: "social", label: "Social Work", description: "Events, community, customer service" }
                 ].map((jobType) => (
                   <div key={jobType.id} className="flex items-start space-x-3 p-3 border rounded-lg">

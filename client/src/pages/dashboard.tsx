@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
-  Calendar, 
+   
   Mail, 
   User, 
   TrendingUp, 
@@ -25,16 +25,18 @@ import {
   X,
   RefreshCw
 } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
+import { apiRequest } from "@/lib/queryClient";
 import type { JobOpportunity, UserPreferences, InsertJobOpportunity } from "@shared/schema";
 import headerImage from "@assets/Senior Woman Using Smartphone_1756590245643.png";
 
 export default function Dashboard() {
   const { toast } = useToast();
   const { user: authUser, isLoading: authLoading, isAuthenticated } = useAuth();
+  const queryClient = useQueryClient();
   
   // Search results state
   const [searchResults, setSearchResults] = useState<InsertJobOpportunity[] | null>(null);
@@ -60,16 +62,94 @@ export default function Dashboard() {
     }
   }, [isAuthenticated, authLoading, toast]);
 
-  // Fetch job opportunities
+  // Show loading state while checking authentication
+  if (authLoading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="mt-4 text-lg text-gray-600">Loading...</p>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  // Don't render dashboard if not authenticated
+  if (!isAuthenticated) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="mt-4 text-lg text-gray-600">Redirecting to login...</p>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  // Fetch job opportunities - reasonable caching for development
   const { data: jobs = [], isLoading: jobsLoading } = useQuery<JobOpportunity[]>({
     queryKey: ["/api/jobs"],
     enabled: !!authUser?.id,
+    staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
+    gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
+    refetchOnMount: false, // Don't automatically refetch on mount
+    refetchOnWindowFocus: false, // Don't refetch when window gains focus
+    refetchOnReconnect: true, // Only refetch when network reconnects
   });
 
   // Fetch user preferences
   const { data: preferences } = useQuery<UserPreferences>({
     queryKey: ["/api/preferences", authUser?.id],
     enabled: !!authUser?.id,
+  });
+
+  // Scrape fresh jobs mutation
+  const scrapeJobsMutation = useMutation({
+    mutationFn: async (params: { query: string; location: string; count: number }) => {
+      const response = await apiRequest("POST", "/api/jobs/scrape", params);
+      return response.json();
+    },
+    onSuccess: (data) => {
+      // Invalidate and refetch jobs
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      toast({
+        title: "Fresh jobs fetched!",
+        description: `Successfully scraped ${data.jobs?.length || 0} new jobs from Indeed.`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to fetch fresh jobs",
+        description: error.message || "Please try again later.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Manual refresh jobs from database
+  const refreshJobsMutation = useMutation({
+    mutationFn: async () => {
+      // Force refetch by invalidating and refetching
+      await queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      return queryClient.refetchQueries({ queryKey: ["/api/jobs"] });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Jobs refreshed!",
+        description: "Latest jobs loaded from database.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to refresh jobs",
+        description: error.message || "Please try again later.",
+        variant: "destructive",
+      });
+    },
   });
 
   // Determine which jobs to show (search results or default jobs)
@@ -139,6 +219,15 @@ export default function Dashboard() {
 
   // Check if any filters are active
   const hasActiveFilters = matchScoreFilter !== "all" || scheduleFilter !== "all" || locationFilter !== "all" || tagFilter !== "all";
+
+  // Handle fetching fresh jobs
+  const handleFetchFreshJobs = () => {
+    scrapeJobsMutation.mutate({
+      query: "remote work",
+      location: "New York",
+      count: 10
+    });
+  };
 
   if (authLoading || jobsLoading) {
     return (
@@ -478,9 +567,48 @@ export default function Dashboard() {
               {searchResults !== null ? 'Jobs matching your search criteria' : 'Based on your preferences and experience'}
             </p>
           </div>
+        <div className="flex items-center gap-4">
+          <Button
+            onClick={handleFetchFreshJobs}
+            disabled={scrapeJobsMutation.isPending}
+            className="bg-green-600 hover:bg-green-700 text-white text-senior-button px-6 py-3 min-h-12 rounded-lg transition-colors duration-200"
+            data-testid="button-fetch-fresh-jobs"
+          >
+            {scrapeJobsMutation.isPending ? (
+              <>
+                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                Fetching...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Fetch Fresh Jobs
+              </>
+            )}
+          </Button>
+          <Button
+            onClick={() => refreshJobsMutation.mutate()}
+            disabled={refreshJobsMutation.isPending}
+            variant="outline"
+            className="text-senior-button px-6 py-3 min-h-12 rounded-lg transition-colors duration-200"
+            data-testid="button-refresh-jobs"
+          >
+            {refreshJobsMutation.isPending ? (
+              <>
+                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                Refreshing...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Refresh Jobs
+              </>
+            )}
+          </Button>
           <Badge variant="secondary" className="text-senior px-4 py-2">
             {filteredJobs.length} of {displayJobs.length} opportunities
           </Badge>
+        </div>
         </div>
 
         {/* Filtering Options */}
@@ -576,7 +704,6 @@ export default function Dashboard() {
                     <SelectItem value="helping">Helping others</SelectItem>
                     <SelectItem value="creative">Creative work</SelectItem>
                     <SelectItem value="social">Social work</SelectItem>
-                    <SelectItem value="hands-on">Hands-on work</SelectItem>
                     <SelectItem value="professional">Professional</SelectItem>
                   </SelectContent>
                 </Select>

@@ -8,6 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -15,9 +16,33 @@ interface LayoutProps {
 
 export function Layout({ children }: LayoutProps) {
   const { isAuthenticated, user } = useAuth();
+  const queryClient = useQueryClient();
 
-  const handleLogout = () => {
-    window.location.href = "/api/logout";
+  const handleLogout = async () => {
+    try {
+      // Clear React Query cache first
+      queryClient.clear();
+      
+      // Clear localStorage
+      localStorage.clear();
+
+      // Clear cookies
+      const cookiesToRemove = [
+        'connect.sid',
+        'replit_authed',
+        'ttcsid',
+        'ttcsid_D004GE3C77U8PIVD',
+      ];
+      cookiesToRemove.forEach(cookie => {
+        document.cookie = `${cookie}=; Max-Age=0; path=/;`;
+      });
+
+      // Call logout endpoint
+      window.location.href = "/api/logout";
+    } catch (error) {
+      // If anything fails, still redirect
+      window.location.href = "/api/logout";
+    }
   };
 
   return (

@@ -22,7 +22,7 @@ export default function Welcome() {
   }, [isAuthenticated, isLoading, setLocation]);
 
   const handleGetStarted = () => {
-    window.location.href = "/api/login";
+    setLocation("/login");
   };
 
   return (

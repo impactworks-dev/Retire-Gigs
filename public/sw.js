@@ -1,4 +1,3 @@
-const CACHE_NAME = 'retiree-gigs-v2';
 const urlsToCache = [
   '/',
   '/offline.html',
@@ -12,6 +11,7 @@ const urlsToCache = [
   '/icons/icon-384x384.png',
   '/icons/icon-512x512.png'
 ];
+const CACHE_NAME = 'retiree-gigs-v2';
 
 // Install event - cache resources
 self.addEventListener('install', (event) => {

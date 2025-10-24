@@ -33,11 +33,7 @@ export const questions: Question[] = [
     title: "What do you enjoy doing in your free time?",
     description: "Select all activities that interest you. This helps us understand what type of work might appeal to you.",
     options: [
-      {
-        value: "hands-on",
-        label: "Hands-on work (fixing, organizing, building)",
-        icon: <Settings className="w-6 h-6" />
-      },
+     
       {
         value: "outdoor",
         label: "Outdoor activities (gardening, walking, nature)",

@@ -15,7 +15,6 @@ interface JobSearchDialogProps {
 }
 
 const JOB_TYPE_OPTIONS = [
-  { value: "hands-on", label: "Hands-On Work" },
   { value: "outdoor", label: "Outdoor Work" },
   { value: "creative", label: "Creative" },
   { value: "helping", label: "Helping Others" },

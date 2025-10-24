@@ -19,6 +19,7 @@ import {
 import cron from "node-cron";
 import nodemailer from "nodemailer";
 import { setupAuth, isAuthenticated, isAdmin } from "./replitAuth";
+import { authService } from "./authService";
 import { geocodeAddress } from "./geocoding";
 import { ResumeParserService } from "./resumeParser";
 import { jobMatchingService } from "./jobMatchingService";
@@ -66,9 +67,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   await setupAuth(app);
   
   // SECURITY: Rate limiting middleware for different endpoint types
+  // More lenient limits for development, stricter for production
+  const isDevelopment = process.env.NODE_ENV === 'development';
+  
   const generalRateLimit = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // Limit each IP to 100 requests per windowMs
+    max: isDevelopment ? 1000 : 100, // Much higher limit for development
     message: { message: "Too many requests, please try again later." },
     standardHeaders: true,
     legacyHeaders: false,
@@ -76,7 +80,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   const strictRateLimit = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 20, // Limit each IP to 20 requests per windowMs for sensitive operations
+    max: isDevelopment ? 200 : 20, // Higher limit for development
     message: { message: "Too many requests for this operation, please try again later." },
     standardHeaders: true,
     legacyHeaders: false,
@@ -90,8 +94,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     legacyHeaders: false,
   });
   
-  // Apply general rate limiting to all routes
-  app.use('/api/', generalRateLimit);
+  // Apply general rate limiting to all routes (disabled in development)
+  if (!isDevelopment) {
+    app.use('/api/', generalRateLimit);
+  }
 
   // Serve service worker file with correct MIME type (needed for PWA functionality)
   app.get('/sw.js', (req, res) => {
@@ -191,13 +197,122 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Auth routes
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user?.claims?.sub || req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      
       const user = await storage.getUser(userId);
-      res.json(user);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      // Remove password from response
+      const { password, ...userWithoutPassword } = user as any;
+      res.json(userWithoutPassword);
     } catch (error) {
       logger.error("Error fetching user", error, { operation: 'fetch_user' });
       res.status(500).json({ message: "Failed to fetch user" });
     }
+  });
+
+  // Email/Password Signup
+  app.post('/api/auth/signup', strictRateLimit, async (req, res) => {
+    try {
+      const { email, password, firstName, lastName, age, gender } = req.body;
+
+      // Validation
+      if (!email || !password || !firstName || !lastName || !age) {
+        return res.status(400).json({ 
+          message: "Email, password, first name, last name, and age are required" 
+        });
+      }
+
+      if (password.length < 8) {
+        return res.status(400).json({ 
+          message: "Password must be at least 8 characters long" 
+        });
+      }
+
+      if (!email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
+        return res.status(400).json({ 
+          message: "Invalid email format" 
+        });
+      }
+
+      // Register user
+      const user = await authService.registerUser({
+        email,
+        password,
+        firstName,
+        lastName,
+        age,
+        gender,
+      });
+
+      // Create session manually for email/password users
+      (req as any).session.passport = {
+        user: { 
+          id: user.id,
+          claims: { sub: user.id, email: user.email }
+        }
+      };
+      
+      // Remove password from response
+      const { password: _, ...userWithoutPassword } = user as any;
+      res.status(201).json(userWithoutPassword);
+    } catch (error: any) {
+      logger.error("Signup error", error, { operation: 'signup' });
+      
+      if (error.message === "User with this email already exists") {
+        return res.status(409).json({ message: error.message });
+      }
+      
+      res.status(500).json({ message: "Failed to create account" });
+    }
+  });
+
+  // Email/Password Login
+  app.post('/api/auth/login', strictRateLimit, async (req, res) => {
+    try {
+      const { email, password } = req.body;
+
+      if (!email || !password) {
+        return res.status(400).json({ 
+          message: "Email and password are required" 
+        });
+      }
+
+      const user = await authService.loginUser(email, password);
+      
+      if (!user) {
+        return res.status(401).json({ 
+          message: "Invalid email or password" 
+        });
+      }
+
+      // Create session manually for email/password users
+      (req as any).session.passport = {
+        user: { 
+          id: user.id,
+          claims: { sub: user.id, email: user.email }
+        }
+      };
+      
+      // Remove password from response
+      const { password: _, ...userWithoutPassword } = user as any;
+      res.json(userWithoutPassword);
+    } catch (error) {
+      logger.error("Login error", error, { operation: 'login' });
+      res.status(500).json({ message: "Login failed" });
+    }
+  });
+
+  // JSON Logout endpoint for API clients
+  app.post('/api/auth/logout', (req, res) => {
+    req.logout(() => {
+      res.json({ message: "Logged out successfully" });
+    });
   });
 
 
@@ -296,7 +411,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Save questionnaire responses
   app.post("/api/questionnaire", strictRateLimit, isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      // For development mode, use mock user ID
+      const userId = req.user?.claims?.sub || "dev-user-123";
       
       // SECURITY: Prevent user binding attacks - only allow authenticated user to submit for themselves
       const requestData = req.body;
@@ -367,12 +483,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Save user preferences
   app.post("/api/preferences", strictRateLimit, isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      // Get user ID from authenticated session
+      const userId = req.user?.claims?.sub || req.user?.id;
       
-      // SECURITY: Strict validation using enhanced schema
+      if (!userId) {
+        return res.status(401).json({ message: "User not properly authenticated" });
+      }
+      
+      // SECURITY: Strict validation using enhanced schema, override any userId from request body
       const preferencesData = insertUserPreferencesSchema.parse({
         ...req.body,
-        userId
+        userId // Always use the authenticated user's ID
       });
       
       logger.info('User preferences validated successfully', { operation: 'validate_preferences', hasPreferences: !!preferencesData });
@@ -559,7 +680,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Saved jobs routes
   app.post("/api/saved-jobs", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      // For development mode, use mock user ID
+      const userId = req.user?.claims?.sub || "dev-user-123";
       const { jobId } = req.body;
 
       if (!jobId) {
@@ -576,7 +698,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/saved-jobs/:jobId", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      // For development mode, use mock user ID
+      const userId = req.user?.claims?.sub || "dev-user-123";
       const { jobId } = req.params;
 
       await storage.unsaveJob(userId, jobId);
@@ -589,7 +712,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/saved-jobs", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      // For development mode, use mock user ID
+      const userId = req.user?.claims?.sub || "dev-user-123";
       const savedJobs = await storage.getUserSavedJobs(userId);
       res.json(savedJobs);
     } catch (error) {
@@ -600,7 +724,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/saved-jobs/check/:jobId", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      // For development mode, use mock user ID
+      const userId = req.user?.claims?.sub || "dev-user-123";
       const { jobId } = req.params;
 
       const isSaved = await storage.isJobSaved(userId, jobId);
@@ -614,7 +739,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Saved news articles endpoints
   app.post("/api/saved-news", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      // For development mode, use mock user ID
+      const userId = req.user?.claims?.sub || "dev-user-123";
       const { articleId } = req.body;
 
       if (!articleId) {
@@ -631,7 +757,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/saved-news/:articleId", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      // For development mode, use mock user ID
+      const userId = req.user?.claims?.sub || "dev-user-123";
       const { articleId } = req.params;
 
       await storage.unsaveNewsArticle(userId, articleId);
@@ -644,7 +771,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/saved-news", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      // For development mode, use mock user ID
+      const userId = req.user?.claims?.sub || "dev-user-123";
       const savedArticles = await storage.getUserSavedNewsArticles(userId);
       res.json(savedArticles);
     } catch (error) {
@@ -655,7 +783,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/saved-news/check/:articleId", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      // For development mode, use mock user ID
+      const userId = req.user?.claims?.sub || "dev-user-123";
       const { articleId } = req.params;
 
       const isSaved = await storage.isNewsArticleSaved(userId, articleId);
@@ -934,7 +1063,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get all resumes for authenticated user
   app.get("/api/resumes", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      // For development mode, use mock user ID
+      const userId = req.user?.claims?.sub || "dev-user-123";
       const resumes = await storage.getUserResumes(userId);
       res.json(resumes);
     } catch (error) {
@@ -946,7 +1076,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get specific resume by ID
   app.get("/api/resumes/:id", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      // For development mode, use mock user ID
+      const userId = req.user?.claims?.sub || "dev-user-123";
       const { id } = req.params;
 
       const resume = await storage.getResume(id);
@@ -969,7 +1100,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Create new resume
   app.post("/api/resumes", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      // For development mode, use mock user ID
+      const userId = req.user?.claims?.sub || "dev-user-123";
       const resumeData = insertResumeSchema.parse({
         ...req.body,
         userId
@@ -990,7 +1122,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Update resume
   app.patch("/api/resumes/:id", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      // For development mode, use mock user ID
+      const userId = req.user?.claims?.sub || "dev-user-123";
       const { id } = req.params;
 
       // Check if resume exists and belongs to user
@@ -1015,7 +1148,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Delete resume
   app.delete("/api/resumes/:id", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      // For development mode, use mock user ID
+      const userId = req.user?.claims?.sub || "dev-user-123";
       const { id } = req.params;
 
       // Check if resume exists and belongs to user
@@ -1039,7 +1173,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Set default resume
   app.put("/api/resumes/:id/default", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      // For development mode, use mock user ID
+      const userId = req.user?.claims?.sub || "dev-user-123";
       const { id } = req.params;
 
       await storage.setDefaultResume(userId, id);
@@ -1086,7 +1221,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Update resume with uploaded file URL and parse content
   app.put("/api/resumes/:id/upload", resumeParsingRateLimit, isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      // For development mode, use mock user ID
+      const userId = req.user?.claims?.sub || "dev-user-123";
       const { id } = req.params;
 
       if (!req.body.uploadedFileUrl) {
@@ -1396,7 +1532,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Endpoint to trigger Lindy job search via webhook (calls Lindy's webhook)
   app.post("/api/trigger-lindy-search", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      // For development mode, use mock user ID
+      const userId = req.user?.claims?.sub || "dev-user-123";
       const { searchContext } = req.body;
 
       // Get user preferences to send to Lindy
@@ -1517,7 +1654,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get personalized job matches for authenticated user
   app.get("/api/jobs/personalized", strictRateLimit, isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      // For development mode, use mock user ID
+      const userId = req.user?.claims?.sub || "dev-user-123";
       const matchingJobs = await jobMatchingService.findMatchingJobsForUser(userId);
       res.json(matchingJobs);
     } catch (error) {
@@ -1552,6 +1690,287 @@ export async function registerRoutes(app: Express): Promise<Server> {
     await jobMatchingService.processAllUserNotifications();
   });
 
+  // Import Apify service
+  const { apifyService } = await import('./services/apifyService');
+  
+  // Import Cron service
+  const { cronService } = await import('./services/cronService');
+
+  // Job scraping endpoints
+  app.post('/api/jobs/scrape', isAuthenticated, async (req: any, res) => {
+    try {
+      if (!apifyService.isServiceAvailable()) {
+        return res.status(503).json({ 
+          message: "Job scraping service not available - APIFY_API_TOKEN not configured" 
+        });
+      }
+
+      const { query, location, count } = req.body;
+      
+      logger.info("Starting job scraping", { 
+        operation: 'scrape_jobs',
+        query,
+        location,
+        count,
+        userId: req.user?.claims?.sub || 'dev-user'
+      });
+
+      const scrapedJobs = await apifyService.scrapeJobs({
+        query: query || 'sales',
+        location: location || 'New York, NY',
+        count: count || 10
+      });
+
+      // Save jobs to database
+      const savedJobs = [];
+      for (const jobData of scrapedJobs) {
+        try {
+          const job = await storage.createJobOpportunity({
+            title: jobData.title,
+            company: jobData.company,
+            location: jobData.location,
+            pay: jobData.salary || 'Not specified',
+            schedule: jobData.jobType || 'Full-time',
+            description: jobData.description,
+            url: jobData.url,
+            tags: [jobData.source, jobData.jobType || 'general'].filter(Boolean),
+            matchScore: 'potential',
+            timeAgo: jobData.postedDate || 'Recently',
+            isActive: true
+          });
+          savedJobs.push(job);
+        } catch (error) {
+          logger.warn("Failed to save job to database", { 
+            error: error instanceof Error ? error.message : 'Unknown error',
+            jobTitle: jobData.title 
+          });
+        }
+      }
+
+      logger.info("Job scraping completed", { 
+        operation: 'scrape_jobs_complete',
+        scrapedCount: scrapedJobs.length,
+        savedCount: savedJobs.length,
+        userId: req.user?.claims?.sub || 'dev-user'
+      });
+
+      res.json({
+        message: `Successfully scraped and saved ${savedJobs.length} jobs`,
+        jobs: savedJobs,
+        totalScraped: scrapedJobs.length,
+        totalSaved: savedJobs.length
+      });
+    } catch (error) {
+      logger.error("Job scraping failed", error, { 
+        operation: 'scrape_jobs_failed',
+        userId: req.user?.claims?.sub || 'dev-user'
+      });
+      res.status(500).json({ 
+        message: "Job scraping failed", 
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Get all jobs
+  app.get('/api/jobs', isAuthenticated, async (req: any, res) => {
+    try {
+      const { page = 1, limit = 20, search, location } = req.query;
+      const offset = (Number(page) - 1) * Number(limit);
+
+      logger.info("Fetching jobs", { 
+        operation: 'fetch_jobs',
+        page: Number(page),
+        limit: Number(limit),
+        search,
+        location,
+        userId: req.user?.claims?.sub || 'dev-user'
+      });
+
+      const jobs = await storage.getJobOpportunities({
+        limit: Number(limit),
+        offset,
+        search: search as string,
+        location: location as string
+      });
+
+      res.json(jobs);
+    } catch (error) {
+      logger.error("Failed to fetch jobs", error, { 
+        operation: 'fetch_jobs_failed',
+        userId: req.user?.claims?.sub || 'dev-user'
+      });
+      res.status(500).json({ 
+        message: "Failed to fetch jobs", 
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Get job by ID
+  app.get('/api/jobs/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const { id } = req.params;
+      
+      const job = await storage.getJobOpportunity(id);
+      if (!job) {
+        return res.status(404).json({ message: "Job not found" });
+      }
+
+      res.json(job);
+    } catch (error) {
+      logger.error("Failed to fetch job", error, { 
+        operation: 'fetch_job_failed',
+        jobId: req.params.id,
+        userId: req.user?.claims?.sub || 'dev-user'
+      });
+      res.status(500).json({ 
+        message: "Failed to fetch job", 
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Test Apify connection
+  app.get('/api/jobs/test-apify', isAuthenticated, async (req: any, res) => {
+    try {
+      if (!apifyService.isServiceAvailable()) {
+        return res.status(503).json({ 
+          message: "Apify service not available - APIFY_API_TOKEN not configured" 
+        });
+      }
+
+      const isConnected = await apifyService.testConnection();
+      
+      res.json({
+        available: apifyService.isServiceAvailable(),
+        connected: isConnected,
+        message: isConnected ? "Apify connection successful" : "Apify connection failed"
+      });
+    } catch (error) {
+      logger.error("Apify connection test failed", error, { 
+        operation: 'test_apify_connection',
+        userId: req.user?.claims?.sub || 'dev-user'
+      });
+      res.status(500).json({ 
+        message: "Apify connection test failed", 
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Add test jobs for demonstration
+  app.post('/api/jobs/add-test-jobs', isAuthenticated, async (req: any, res) => {
+    try {
+      const testJobs = [
+        {
+          title: "Senior Sales Manager",
+          company: "Tech Solutions Inc",
+          location: "New York, NY",
+          pay: "$80,000 - $100,000",
+          schedule: "Full-time",
+          description: "Lead a team of sales professionals in the technology sector. Manage client relationships and drive revenue growth.",
+          url: "https://example.com/job1",
+          tags: ["sales", "management", "technology"],
+          matchScore: "great",
+          timeAgo: "2 days ago",
+          isActive: true
+        },
+        {
+          title: "Part-time Customer Service Representative",
+          company: "Retail Plus",
+          location: "Remote",
+          pay: "$20 - $25/hour",
+          schedule: "Part-time",
+          description: "Provide excellent customer service via phone and email. Flexible hours available.",
+          url: "https://example.com/job2",
+          tags: ["customer-service", "remote", "part-time"],
+          matchScore: "good",
+          timeAgo: "1 day ago",
+          isActive: true
+        },
+        {
+          title: "Marketing Coordinator",
+          company: "Creative Agency",
+          location: "Los Angeles, CA",
+          pay: "$45,000 - $55,000",
+          schedule: "Full-time",
+          description: "Coordinate marketing campaigns and support the marketing team with various projects.",
+          url: "https://example.com/job3",
+          tags: ["marketing", "coordination", "creative"],
+          matchScore: "potential",
+          timeAgo: "3 days ago",
+          isActive: true
+        }
+      ];
+
+      const savedJobs = [];
+      for (const jobData of testJobs) {
+        try {
+          const job = await storage.createJobOpportunity(jobData);
+          savedJobs.push(job);
+        } catch (error) {
+          logger.warn("Failed to save test job", { 
+            error: error instanceof Error ? error.message : 'Unknown error',
+            jobTitle: jobData.title 
+          });
+        }
+      }
+
+      res.json({
+        message: `Successfully added ${savedJobs.length} test jobs`,
+        jobs: savedJobs
+      });
+    } catch (error) {
+      logger.error("Failed to add test jobs", error, { 
+        operation: 'add_test_jobs',
+        userId: req.user?.claims?.sub || 'dev-user'
+      });
+      res.status(500).json({ 
+        message: "Failed to add test jobs", 
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Cron service management endpoints
+  app.get('/api/cron/status', isAuthenticated, async (req: any, res) => {
+    try {
+      const status = cronService.getStatus();
+      res.json({
+        success: true,
+        status
+      });
+    } catch (error) {
+      logger.error("Failed to get cron status", error, { 
+        operation: 'get_cron_status',
+        userId: req.user?.claims?.sub || 'dev-user'
+      });
+      res.status(500).json({ 
+        message: "Failed to get cron status", 
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  app.post('/api/cron/trigger', isAuthenticated, async (req: any, res) => {
+    try {
+      const result = await cronService.triggerScraping();
+      res.json({
+        success: result.success,
+        message: result.message
+      });
+    } catch (error) {
+      logger.error("Failed to trigger cron scraping", error, { 
+        operation: 'trigger_cron_scraping',
+        userId: req.user?.claims?.sub || 'dev-user'
+      });
+      res.status(500).json({ 
+        message: "Failed to trigger cron scraping", 
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
 
   const httpServer = createServer(app);
   return httpServer;

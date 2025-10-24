@@ -118,15 +118,113 @@ export function JobCard({ job, onViewDetails }: JobCardProps) {
     }
   };
 
+  const formatLocation = (location: any) => {
+    // If location is a string, check if it's JSON
+    if (typeof location === 'string') {
+      // Try to parse as JSON if it looks like JSON
+      if (location.startsWith('{') && location.endsWith('}')) {
+        try {
+          const parsed = JSON.parse(location);
+          return formatLocation(parsed);
+        } catch (e) {
+          // If parsing fails, return the string as is
+          return location;
+        }
+      }
+      return location;
+    }
+    
+    // If location is an object, try to extract the formatted address
+    if (typeof location === 'object' && location !== null) {
+      // Try to get the formatted address first
+      if (location.formatted?.long) {
+        return location.formatted.long;
+      }
+      if (location.formatted?.short) {
+        return location.formatted.short;
+      }
+      if (location.fullAddress) {
+        return location.fullAddress;
+      }
+      if (location.city && location.admin1Name) {
+        return `${location.city}, ${location.admin1Name}`;
+      }
+      if (location.city) {
+        return location.city;
+      }
+    }
+    
+    // Fallback to string representation
+    return String(location);
+  };
+
+  const formatPay = (pay: any) => {
+    // If pay is a string, check if it's JSON
+    if (typeof pay === 'string') {
+      // Try to parse as JSON if it looks like JSON
+      if (pay.startsWith('{') && pay.endsWith('}')) {
+        try {
+          const parsed = JSON.parse(pay);
+          return formatPay(parsed);
+        } catch (e) {
+          // If parsing fails, return the string as is
+          return pay;
+        }
+      }
+      return pay;
+    }
+    
+    // If pay is an object, format it properly
+    if (typeof pay === 'object' && pay !== null) {
+      const { min, max, type, currency = 'USD' } = pay;
+      
+      if (min && max) {
+        const formatCurrency = (amount: number) => {
+          return new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: currency,
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0,
+          }).format(amount);
+        };
+        
+        const formattedMin = formatCurrency(min);
+        const formattedMax = formatCurrency(max);
+        const typeText = type === 'yearly' ? '/year' : type === 'hourly' ? '/hour' : '';
+        
+        return `${formattedMin} - ${formattedMax}${typeText}`;
+      }
+      
+      if (min) {
+        const formatCurrency = (amount: number) => {
+          return new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: currency,
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0,
+          }).format(amount);
+        };
+        
+        const formattedMin = formatCurrency(min);
+        const typeText = type === 'yearly' ? '/year' : type === 'hourly' ? '/hour' : '';
+        
+        return `${formattedMin}+${typeText}`;
+      }
+    }
+    
+    // Fallback to string representation
+    return String(pay);
+  };
+
   return (
     <div 
       className="bg-white rounded-2xl shadow-lg p-6 hover:shadow-xl transition-shadow duration-200"
       data-testid={`card-job-${job.id}`}
     >
       <div className="flex items-start justify-between mb-4">
-        <div className="flex-1">
+        <div className="flex-1 pr-4">
           <h4 
-            className="mobile-subheading text-gray-900 mb-2"
+            className="mobile-subheading text-gray-900 mb-2 line-clamp-2"
             data-testid={`text-job-title-${job.id}`}
           >
             {job.title}
@@ -138,16 +236,22 @@ export function JobCard({ job, onViewDetails }: JobCardProps) {
             {job.company}
           </p>
           <div className="flex items-center text-senior text-senior-muted">
-            <MapPin className="w-5 h-5 mr-2" />
-            <span data-testid={`text-location-${job.id}`}>{job.location}</span>
+            <MapPin className="w-5 h-5 mr-2 flex-shrink-0" />
+            <span 
+              className="truncate"
+              data-testid={`text-location-${job.id}`}
+              title={formatLocation(job.location)}
+            >
+              {formatLocation(job.location)}
+            </span>
           </div>
         </div>
-        <div className="text-right">
+        <div className="text-right flex-shrink-0">
           <div 
-            className="text-senior-large font-bold text-secondary"
+            className="text-senior-large font-bold text-secondary mb-1"
             data-testid={`text-pay-${job.id}`}
           >
-            {job.pay}
+            {formatPay(job.pay)}
           </div>
           <div 
             className="text-senior text-senior-muted"
@@ -159,7 +263,7 @@ export function JobCard({ job, onViewDetails }: JobCardProps) {
       </div>
 
       <p 
-        className="text-senior text-senior-secondary mb-4"
+        className="text-senior text-senior-secondary mb-4 line-clamp-3"
         data-testid={`text-description-${job.id}`}
       >
         {job.description}
@@ -167,10 +271,10 @@ export function JobCard({ job, onViewDetails }: JobCardProps) {
 
       <div className="flex items-center justify-between mt-6">
         <div className="flex items-center text-senior text-senior-muted">
-          <Clock className="w-5 h-5 mr-2" />
+          <Clock className="w-5 h-5 mr-2 flex-shrink-0" />
           <span data-testid={`text-time-ago-${job.id}`}>{job.timeAgo}</span>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-shrink-0">
           {isAuthenticated && (
             <Button
               variant="outline"
