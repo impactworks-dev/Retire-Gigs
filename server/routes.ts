@@ -19,6 +19,7 @@ import {
 import cron from "node-cron";
 import nodemailer from "nodemailer";
 import { setupAuth, isAuthenticated, isAdmin } from "./replitAuth";
+import { authService } from "./authService";
 import { geocodeAddress } from "./geocoding";
 import { ResumeParserService } from "./resumeParser";
 import { jobMatchingService } from "./jobMatchingService";
@@ -196,29 +197,122 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Auth routes
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
     try {
-      // For development mode, return a mock user
-      if (!process.env.REPL_ID || process.env.REPL_ID === "5d15e829-8ca1-4d51-a215-0377c638b2c7") {
-        const mockUser = {
-          id: "dev-user-123",
-          email: "dev@example.com",
-          firstName: "Development",
-          lastName: "User",
-          age: "55+",
-          profileImageUrl: null,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        };
-        return res.json(mockUser);
+      const userId = req.user?.claims?.sub || req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
       }
-
-      // For development mode, use mock user ID
-      const userId = req.user?.claims?.sub || "dev-user-123";
+      
       const user = await storage.getUser(userId);
-      res.json(user);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      // Remove password from response
+      const { password, ...userWithoutPassword } = user as any;
+      res.json(userWithoutPassword);
     } catch (error) {
       logger.error("Error fetching user", error, { operation: 'fetch_user' });
       res.status(500).json({ message: "Failed to fetch user" });
     }
+  });
+
+  // Email/Password Signup
+  app.post('/api/auth/signup', strictRateLimit, async (req, res) => {
+    try {
+      const { email, password, firstName, lastName, age, gender } = req.body;
+
+      // Validation
+      if (!email || !password || !firstName || !lastName || !age) {
+        return res.status(400).json({ 
+          message: "Email, password, first name, last name, and age are required" 
+        });
+      }
+
+      if (password.length < 8) {
+        return res.status(400).json({ 
+          message: "Password must be at least 8 characters long" 
+        });
+      }
+
+      if (!email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
+        return res.status(400).json({ 
+          message: "Invalid email format" 
+        });
+      }
+
+      // Register user
+      const user = await authService.registerUser({
+        email,
+        password,
+        firstName,
+        lastName,
+        age,
+        gender,
+      });
+
+      // Create session manually for email/password users
+      (req as any).session.passport = {
+        user: { 
+          id: user.id,
+          claims: { sub: user.id, email: user.email }
+        }
+      };
+      
+      // Remove password from response
+      const { password: _, ...userWithoutPassword } = user as any;
+      res.status(201).json(userWithoutPassword);
+    } catch (error: any) {
+      logger.error("Signup error", error, { operation: 'signup' });
+      
+      if (error.message === "User with this email already exists") {
+        return res.status(409).json({ message: error.message });
+      }
+      
+      res.status(500).json({ message: "Failed to create account" });
+    }
+  });
+
+  // Email/Password Login
+  app.post('/api/auth/login', strictRateLimit, async (req, res) => {
+    try {
+      const { email, password } = req.body;
+
+      if (!email || !password) {
+        return res.status(400).json({ 
+          message: "Email and password are required" 
+        });
+      }
+
+      const user = await authService.loginUser(email, password);
+      
+      if (!user) {
+        return res.status(401).json({ 
+          message: "Invalid email or password" 
+        });
+      }
+
+      // Create session manually for email/password users
+      (req as any).session.passport = {
+        user: { 
+          id: user.id,
+          claims: { sub: user.id, email: user.email }
+        }
+      };
+      
+      // Remove password from response
+      const { password: _, ...userWithoutPassword } = user as any;
+      res.json(userWithoutPassword);
+    } catch (error) {
+      logger.error("Login error", error, { operation: 'login' });
+      res.status(500).json({ message: "Login failed" });
+    }
+  });
+
+  // JSON Logout endpoint for API clients
+  app.post('/api/auth/logout', (req, res) => {
+    req.logout(() => {
+      res.json({ message: "Logged out successfully" });
+    });
   });
 
 
@@ -389,13 +483,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Save user preferences
   app.post("/api/preferences", strictRateLimit, isAuthenticated, async (req: any, res) => {
     try {
-      // For development mode, use mock user ID
-      const userId = req.user?.claims?.sub || "dev-user-123";
+      // Get user ID from authenticated session
+      const userId = req.user?.claims?.sub || req.user?.id;
       
-      // SECURITY: Strict validation using enhanced schema
+      if (!userId) {
+        return res.status(401).json({ message: "User not properly authenticated" });
+      }
+      
+      // SECURITY: Strict validation using enhanced schema, override any userId from request body
       const preferencesData = insertUserPreferencesSchema.parse({
         ...req.body,
-        userId
+        userId // Always use the authenticated user's ID
       });
       
       logger.info('User preferences validated successfully', { operation: 'validate_preferences', hasPreferences: !!preferencesData });

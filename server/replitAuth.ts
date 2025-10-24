@@ -14,10 +14,8 @@ if (!process.env.REPLIT_DOMAINS) {
 
 const getOidcConfig = memoize(
   async () => {
-    // For local development without valid REPL_ID, return null to use development bypass
-    if (!process.env.REPL_ID || process.env.REPL_ID === "5d15e829-8ca1-4d51-a215-0377c638b2c7") {
-      console.log("Using development authentication bypass - no valid REPL_ID found");
-      return null;
+    if (!process.env.REPL_ID) {
+      throw new Error("REPL_ID environment variable is required for authentication");
     }
     
     return await client.discovery(
@@ -44,7 +42,7 @@ export function getSession() {
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      secure: true,
+      secure: process.env.NODE_ENV === 'production',  // Only secure in production
       maxAge: sessionTtl,
     },
   });
@@ -80,25 +78,6 @@ export async function setupAuth(app: Express) {
   app.use(passport.session());
 
   const config = await getOidcConfig();
-  
-  // Skip OIDC setup if config is null (local development without valid REPL_ID)
-  if (!config) {
-    console.log("Skipping OIDC authentication setup for local development");
-    
-    // Add development authentication bypass
-    app.get("/api/login", (req, res) => {
-      console.log("Development login requested");
-      res.redirect("/?dev-login=true");
-    });
-    
-    app.get("/api/logout", (req, res) => {
-      req.logout(() => {
-        res.redirect("/");
-      });
-    });
-    
-    return;
-  }
 
   const verify: VerifyFunction = async (
     tokens: client.TokenEndpointResponse & client.TokenEndpointResponseHelpers,
@@ -177,40 +156,48 @@ export async function setupAuth(app: Express) {
     })(req, res, next);
   });
 
-  app.get("/api/logout", (req, res) => {
+  app.get("/api/logout", async (req, res) => {
+    const user = req.user as any;
+    
     req.logout(() => {
-      res.redirect(
-        client.buildEndSessionUrl(config, {
-          client_id: process.env.REPL_ID!,
-          post_logout_redirect_uri: `${req.protocol}://${req.hostname}`,
-        }).href
-      );
+      // If the user has OIDC tokens (Replit login), redirect to OIDC logout
+      if (user?.access_token && user?.expires_at) {
+        try {
+          const logoutUrl = client.buildEndSessionUrl(config, {
+            client_id: process.env.REPL_ID!,
+            post_logout_redirect_uri: `${req.protocol}://${req.hostname}`,
+          }).href;
+          res.redirect(logoutUrl);
+        } catch (error) {
+          // If OIDC logout fails, just redirect to home
+          res.redirect('/');
+        }
+      } else {
+        // For email/password users, just redirect to home
+        res.redirect('/');
+      }
     });
   });
 }
 
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
-  // For development mode, allow access if no valid REPL_ID is set
-  if (!process.env.REPL_ID || process.env.REPL_ID === "5d15e829-8ca1-4d51-a215-0377c638b2c7") {
-    console.log("Development mode: bypassing authentication");
-    // Set up mock user for development
-    (req as any).user = {
-      claims: {
-        sub: "dev-user-123",
-        email: "dev@example.com",
-        first_name: "Development",
-        last_name: "User"
-      }
-    };
-    return next();
-  }
-
   const user = req.user as any;
 
-  if (!req.isAuthenticated() || !user?.expires_at) {
+  if (!req.isAuthenticated()) {
     return res.status(401).json({ message: "Unauthorized" });
   }
 
+  // For email/password users (no expires_at or refresh_token)
+  if (!user?.expires_at) {
+    // Email/password users are valid as long as they have a session
+    if (user?.id || user?.claims?.sub) {
+      return next();
+    } else {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+  }
+
+  // For OIDC users (with expires_at and refresh_token)
   const now = Math.floor(Date.now() / 1000);
   if (now <= user.expires_at) {
     return next();

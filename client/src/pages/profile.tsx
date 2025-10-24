@@ -250,7 +250,12 @@ export default function Profile() {
   };
 
   const handleLogout = () => {
-    window.location.href = "/api/logout";
+    // Clear React Query cache
+    queryClient.clear();
+    // Clear localStorage
+    localStorage.clear();
+    // Redirect to logout endpoint
+    window.location.href = "/login";
   };
 
   if (authLoading) {

@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { AlertCircle, RefreshCw } from "lucide-react";
 import Welcome from "@/pages/welcome";
 import Login from "@/pages/login";
+import Signup from "@/pages/signup";
 import Onboarding from "@/pages/onboarding";
 import Questionnaire from "@/pages/questionnaire";
 import RetakeAssessment from "@/pages/retake-assessment";
@@ -143,6 +144,7 @@ function Router() {
         <>
           <Route path="/" component={Welcome} />
           <Route path="/login" component={Login} />
+          <Route path="/signup" component={Signup} />
         </>
       ) : (
         <>
