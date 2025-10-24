@@ -140,8 +140,6 @@ export const userPreferences = pgTable("user_preferences", {
 
 export const jobOpportunities = pgTable("job_opportunities", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  source: text("source").notNull().default("manual"), // "indeed", "perplexity", "manual"
-  externalId: text("external_id"), // Job ID from external source (Indeed job key, etc.)
   title: text("title").notNull(),
   company: text("company").notNull(),
   location: text("location").notNull(),
@@ -152,15 +150,9 @@ export const jobOpportunities = pgTable("job_opportunities", {
   tags: jsonb("tags").notNull(), // Array of strings for matching
   matchScore: text("match_score"), // "great", "good", "potential"
   timeAgo: text("time_ago").notNull(),
-  postedAt: timestamp("posted_at"), // When the job was originally posted
-  lastSeenAt: timestamp("last_seen_at"), // When we last saw this job in a scrape
-  rawPayload: jsonb("raw_payload"), // Raw data from source for debugging
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
-}, (table) => ({
-  // Unique constraint to prevent duplicate jobs from same source
-  uniqueSourceExternalId: index("unique_source_external_id").on(table.source, table.externalId),
-}));
+});
 
 export const savedJobs = pgTable("saved_jobs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
