@@ -1,5 +1,6 @@
 import { ApifyClient } from 'apify-client';
 import { logger } from '../logger';
+import { env } from 'process';
 
 export interface JobData {
   id?: string;
@@ -184,7 +185,7 @@ export class ApifyService {
       logger.info('Starting Apify job scraping', { input });
 
       // Run the Actor and wait for it to finish
-      const run = await this.client!.actor("qA8rz8tR61HdkfTBL").call(input);
+      const run = await this.client!.actor("hMvNSpz3JnHgl5jkh").call(input);
 
       // Fetch Actor results from the run's dataset
       const { items } = await this.client!.dataset(run.defaultDatasetId).listItems();
