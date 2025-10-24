@@ -364,8 +364,7 @@ export async function setupAuth(app: Express) {
       res.redirect("/api/login");
     }
   });
-
-
+}
 
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
   const user = req.user as any;
